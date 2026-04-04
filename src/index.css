@@ -1,0 +1,39 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-handwritten: "Dancing Script", cursive;
+  --font-elegant: "Great Vibes", cursive;
+  --font-chinese-handwritten: "Zhi Mang Xing", cursive;
+
+  --color-lunar-red: #d32f2f;
+  --color-lunar-gold: #ffd700;
+  --color-valentine-pink: #f06292;
+  --color-easter-green: #81c784;
+  --color-midautumn-blue: #1a237e;
+  --color-halloween-orange: #f57c00;
+  --color-thanksgiving-amber: #ff8f00;
+  --color-christmas-green: #2e7d32;
+}
+
+@layer base {
+  body {
+    @apply font-sans antialiased text-slate-900 bg-[#fafafa] transition-colors duration-700;
+  }
+}
+
+.perspective-1000 {
+  perspective: 1000px;
+}
+
+.backface-hidden {
+  backface-visibility: hidden;
+}
+
+.rotate-y-180 {
+  transform: rotateY(180deg);
+}
+
+.preserve-3d {
+  transform-style: preserve-3d;
+}
