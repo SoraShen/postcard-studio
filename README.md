@@ -33,6 +33,34 @@ Open the URL shown in the terminal (default [http://localhost:3000](http://local
 
 ---
 
+## 每次更新：本地提交 + 服务器构建
+
+**本机（在项目根目录）**
+
+```bash
+git add .
+git commit -m "简要说明本次修改"
+git push origin main
+```
+
+若主分支名为 `master`，将最后一行改为 `git push origin master`。
+
+**服务器（静态站 + Cloudflare Worker 代调 API 时）**
+
+```bash
+cd /www/wwwroot/alexsora.xyz
+# 若构建报 dist/.user.ini EPERM（宝塔）：
+chattr -i dist/.user.ini 2>/dev/null; rm -f dist/.user.ini
+
+git pull
+npm install
+VITE_USE_GEMINI_PROXY=true VITE_GEMINI_WORKER_BASE=https://ai.alexsora.xyz npm run build
+```
+
+按你的实际路径与 Worker 域名替换 `cd` 与 `VITE_GEMINI_WORKER_BASE`。
+
+---
+
 ## Environment variables
 
 All variables are documented in [`.env.example`](.env.example).
@@ -41,8 +69,9 @@ All variables are documented in [`.env.example`](.env.example).
 |----------|-------------|
 | `GEMINI_API_KEY` | Local dev (injected by Vite) **or** backend server only in production — **do not** expose this in public front-end builds. |
 | `VITE_GEMINI_API_KEY` | Optional; same as above for browser-side dev only — **avoid** for public sites. |
-| `VITE_USE_GEMINI_PROXY` | Set to `true` so the app calls `POST /api/generate-postcard` instead of Gemini from the browser. **Required in `npm run build`** when you deploy with the Node server. |
-| `VITE_GEMINI_BACKEND_URL` | Optional API origin (no trailing slash). Leave empty to use same-origin `/api` (e.g. behind Nginx reverse proxy). |
+| `VITE_USE_GEMINI_PROXY` | Set to `true` so the app uses a backend/Worker instead of calling Gemini from the browser. **Required in `npm run build`** for production. |
+| `VITE_GEMINI_WORKER_BASE` | e.g. `https://ai.alexsora.xyz` — calls `.../v1beta/models/...:generateContent` via your Worker (no trailing slash). |
+| `VITE_GEMINI_BACKEND_URL` | Optional; use with `POST /api/generate-postcard` on your origin when not using `VITE_GEMINI_WORKER_BASE`. |
 | `APP_URL` | Optional; base URL for links and callbacks when hosted. |
 
 **Never commit `.env`** — it is listed in `.gitignore`.
@@ -100,3 +129,25 @@ For cross-origin frontends, set `GEMINI_ALLOWED_ORIGINS` on the server (comma-se
 6. Add HTTPS (e.g. Let’s Encrypt) when ready.
 
 Do **not** open port `8787` to the public internet if the reverse proxy runs on the same machine; only **80/443** need to be public.
+
+---
+
+## Image generation speed
+
+The app tries **fast models first** (`gemini-2.5-flash-image`, then `gemini-3.1-flash-image-preview`) in two phases: **with** `responseModalities: IMAGE` for all models, then **without** — so a mid-list model can succeed without waiting on every fallback for an earlier model. List is in [`src/lib/geminiImageModels.ts`](src/lib/geminiImageModels.ts).
+
+Further gains: smaller source images before upload, stable network, and billing/quota on the Google project.
+
+---
+
+## Animated GIF from a static postcard?
+
+**Gemini image models** (e.g. Nano Banana / `gemini-*-flash-image`) output **static images** (PNG), not GIF.
+
+For **AI motion** from an image or prompt, Google’s side is mainly **video** APIs such as **Veo** (`veo-*` in the model list) — you would generate a **short video**, then convert to GIF with **ffmpeg** or a small server job. That is a separate product path (latency, quota, and pricing differ from image generation).
+
+Other options: third-party **image-to-video** APIs, or **client-only** animation (e.g. **gif.js**, CSS/canvas loops) for lightweight effects without a new model.
+
+---
+
+> **Note:** After each change in this repo, use the **「每次更新」** commands above for commit and server build.

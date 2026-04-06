@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useRef, useEffect, ChangeEvent, useCallback } from 'react';
+import { useState, useRef, useEffect, ChangeEvent, useCallback, type MouseEvent, type TouchEvent } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import Cropper, { Area, Point } from 'react-easy-crop';
 import { 
@@ -517,7 +517,8 @@ const TRANSLATIONS: Record<string, any> = {
     magicUnlocked: "Magical Credits Unlocked!",
     downloadStitched: "Download Stitched (PNG)",
     downloadHidden: "Download Hidden (Phantom Tank)",
-    downloadMode: "Download Mode"
+    downloadMode: "Download Mode",
+    easterEggHint: 'Double-tap "Sora" or press and hold to unlock a surprise',
   },
   zh: {
     title: "Sora的明信片工坊",
@@ -570,7 +571,8 @@ const TRANSLATIONS: Record<string, any> = {
     magicUnlocked: "魔法积分已解锁！",
     downloadStitched: "下载拼接图 (PNG)",
     downloadHidden: "下载隐藏图 (幻影坦克)",
-    downloadMode: "下载模式"
+    downloadMode: "下载模式",
+    easterEggHint: "连点两下「Sora」或长按，可解锁小彩蛋",
   }
 };
 
@@ -644,7 +646,7 @@ function shareOrDownloadPngFromCanvas(
 // --- Components ---
 
 export default function App() {
-  const [language, setLanguage] = useState<'en' | 'zh'>('en');
+  const [language, setLanguage] = useState<'en' | 'zh'>('zh');
   const [selectedHoliday, setSelectedHoliday] = useState<Holiday>(HOLIDAYS[5]); // Default to Easter
   const [selectedStyle, setSelectedStyle] = useState<Style>(STYLES[0]); // Default to Watercolor
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
@@ -683,6 +685,8 @@ export default function App() {
   const [crop, setCrop] = useState<Point>({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [aspectRatio, setAspectRatio] = useState<number | undefined>(undefined);
+  /** Natural w/h of current photo (upload or generated) for Free crop + preview frames */
+  const [displayImageAspect, setDisplayImageAspect] = useState(4 / 3);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -727,6 +731,24 @@ export default function App() {
       document.removeEventListener('touchstart', close);
     };
   }, [downloadMenuOpen]);
+
+  const aspectImageSrc = generatedImage || uploadedImage;
+  useEffect(() => {
+    if (!aspectImageSrc) {
+      setDisplayImageAspect(4 / 3);
+      return;
+    }
+    const img = new Image();
+    img.onload = () => {
+      const h = Math.max(img.naturalHeight, 1);
+      const r = img.naturalWidth / h;
+      setDisplayImageAspect(Number.isFinite(r) && r > 0 ? r : 4 / 3);
+    };
+    img.onerror = () => setDisplayImageAspect(4 / 3);
+    img.src = aspectImageSrc;
+  }, [aspectImageSrc]);
+
+  const cropFrameAspect = aspectRatio !== undefined ? aspectRatio : displayImageAspect;
 
   const handleImageUpload = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1241,14 +1263,55 @@ export default function App() {
     }
   };
 
-  const longPressTimer = useRef<NodeJS.Timeout | null>(null);
-  const handleSoraTouchStart = () => {
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const longPressOriginRef = useRef<{ x: number; y: number } | null>(null);
+  const lastSoraTapRef = useRef(0);
+
+  const handleSoraTouchStart = (e: TouchEvent<HTMLSpanElement> | MouseEvent<HTMLSpanElement>) => {
+    if (!generatedImage) return;
+    if ('touches' in e && e.touches[0]) {
+      longPressOriginRef.current = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+    } else if ('clientX' in e) {
+      longPressOriginRef.current = { x: e.clientX, y: e.clientY };
+    }
     longPressTimer.current = setTimeout(() => {
       setShowEasterEgg(true);
-    }, 1500);
+      longPressTimer.current = null;
+    }, 700);
   };
+
+  const handleSoraTouchMove = (e: TouchEvent<HTMLSpanElement>) => {
+    if (!longPressOriginRef.current || !longPressTimer.current) return;
+    const t = e.touches[0];
+    if (!t) return;
+    const dx = Math.abs(t.clientX - longPressOriginRef.current.x);
+    const dy = Math.abs(t.clientY - longPressOriginRef.current.y);
+    if (dx > 14 || dy > 14) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+  };
+
   const handleSoraTouchEnd = () => {
-    if (longPressTimer.current) clearTimeout(longPressTimer.current);
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+    longPressOriginRef.current = null;
+  };
+
+  /** Mobile: double-tap is reliable; long-press is flaky in many in-app browsers */
+  const handleSoraClickMobileEgg = () => {
+    if (!generatedImage) return;
+    if (!window.matchMedia('(hover: none)').matches) return;
+    const now = Date.now();
+    const prev = lastSoraTapRef.current;
+    if (prev > 0 && now - prev < 450) {
+      setShowEasterEgg(true);
+      lastSoraTapRef.current = 0;
+    } else {
+      lastSoraTapRef.current = now;
+    }
   };
 
   return (
@@ -1274,18 +1337,40 @@ export default function App() {
             <div className={`p-2 rounded-xl bg-white shadow-sm border border-slate-100 ${selectedHoliday.accentColor}`}>
               <Sparkles size={28} />
             </div>
-            <h1 className="text-2xl font-semibold tracking-tight select-none">
-              <span 
+            <div className="flex flex-col items-center md:items-start gap-0.5">
+            <h1 className="text-2xl font-semibold tracking-tight select-none text-center md:text-left">
+              <span
+                role={generatedImage ? 'button' : undefined}
+                tabIndex={generatedImage ? 0 : undefined}
+                onKeyDown={
+                  generatedImage
+                    ? (ev) => {
+                        if (ev.key === 'Enter' || ev.key === ' ') {
+                          ev.preventDefault();
+                          setShowEasterEgg(true);
+                        }
+                      }
+                    : undefined
+                }
                 onMouseDown={generatedImage ? handleSoraTouchStart : undefined}
                 onMouseUp={generatedImage ? handleSoraTouchEnd : undefined}
+                onMouseLeave={generatedImage ? handleSoraTouchEnd : undefined}
                 onTouchStart={generatedImage ? handleSoraTouchStart : undefined}
+                onTouchMove={generatedImage ? handleSoraTouchMove : undefined}
                 onTouchEnd={generatedImage ? handleSoraTouchEnd : undefined}
-                className={`${generatedImage ? 'cursor-help hover:text-amber-500 transition-colors' : ''}`}
+                onClick={generatedImage ? handleSoraClickMobileEgg : undefined}
+                className={`${generatedImage ? 'cursor-pointer touch-manipulation hover:text-amber-500 transition-colors' : ''}`}
               >
                 Sora
               </span>
               {language === 'zh' ? '的明信片工坊' : "'s Postcard Studio"}
             </h1>
+            {generatedImage && (
+              <p className="md:hidden text-center text-[11px] leading-snug text-slate-400 max-w-[min(100%,280px)] px-1">
+                {t.easterEggHint}
+              </p>
+            )}
+            </div>
             
             {showEasterEgg && (
               <motion.button
@@ -1393,7 +1478,10 @@ export default function App() {
               animate={{ opacity: 1, scale: 1 }}
               className="w-full max-w-2xl flex flex-col items-center gap-6"
             >
-              <div className="relative aspect-[4/3] w-full rounded-3xl overflow-hidden shadow-2xl border-8 border-white bg-slate-900">
+              <div
+                className="relative w-full rounded-3xl overflow-hidden shadow-2xl border-8 border-white bg-slate-900"
+                style={{ aspectRatio: cropFrameAspect }}
+              >
                 <Cropper
                   image={uploadedImage}
                   crop={crop}
@@ -1473,8 +1561,8 @@ export default function App() {
               animate={{ opacity: 1, scale: 1 }}
               className="w-full max-w-2xl flex flex-col items-center gap-8"
             >
-              <div 
-                style={{ aspectRatio: aspectRatio || '4/3' }}
+              <div
+                style={{ aspectRatio: cropFrameAspect }}
                 className="relative w-full rounded-3xl overflow-hidden shadow-2xl border-8 border-white"
               >
                 <img src={uploadedImage} alt="Preview" className="w-full h-full object-cover select-none" />
@@ -1637,9 +1725,9 @@ export default function App() {
                   className="w-full max-w-3xl flex flex-col items-center gap-12 mt-6"
                 >
                   {/* 3D Card */}
-                  <div 
+                  <div
                     className="perspective-1000 w-full max-w-2xl relative group"
-                    style={{ aspectRatio: aspectRatio || '4/3' }}
+                    style={{ aspectRatio: displayImageAspect }}
                   >
                 {/* Flip Hint */}
                 <AnimatePresence>

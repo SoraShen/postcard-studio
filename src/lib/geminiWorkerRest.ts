@@ -1,10 +1,5 @@
 import { formatGenaiError, pickInlineImageFromResponse } from './geminiPostcardGeneration';
-
-const MODELS_TO_TRY = [
-  'gemini-2.5-flash-image',
-  'gemini-3.1-flash-image-preview',
-  'gemini-3-pro-image-preview',
-] as const;
+import { POSTCARD_IMAGE_MODELS } from './geminiImageModels';
 
 type GenContentResponse = Parameters<typeof pickInlineImageFromResponse>[0];
 
@@ -20,59 +15,64 @@ export async function runGeminiPostcardViaWorkerRest(
   let lastErr: unknown;
   let resultDataUrl: string | null = null;
 
-  outer: for (const model of MODELS_TO_TRY) {
-    for (const requestImageModality of [true, false] as const) {
-      const url = `${base}/v1beta/models/${encodeURIComponent(model)}:generateContent`;
-      try {
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [
-              {
-                role: 'user',
-                parts: [
-                  { inlineData: { mimeType: input.mimeType, data: input.imageBase64 } },
-                  { text: input.prompt },
-                ],
-              },
-            ],
-            generationConfig: {
-              ...(requestImageModality ? { responseModalities: ['IMAGE'] } : {}),
-              imageConfig: { imageSize: '1K' },
+  const tryModel = async (model: string, requestImageModality: boolean): Promise<boolean> => {
+    const url = `${base}/v1beta/models/${encodeURIComponent(model)}:generateContent`;
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [
+            {
+              role: 'user',
+              parts: [
+                { inlineData: { mimeType: input.mimeType, data: input.imageBase64 } },
+                { text: input.prompt },
+              ],
             },
-          }),
-        });
+          ],
+          generationConfig: {
+            ...(requestImageModality ? { responseModalities: ['IMAGE'] } : {}),
+            imageConfig: { imageSize: '1K' },
+          },
+        }),
+      });
 
-        const text = await res.text();
-        let json: GenContentResponse & { error?: { message?: string; code?: number } };
-        try {
-          json = JSON.parse(text) as typeof json;
-        } catch {
-          lastErr = new Error(text.slice(0, 300));
-          continue;
-        }
-
-        if (!res.ok) {
-          const msg = json?.error?.message || text.slice(0, 300);
-          lastErr = new Error(msg);
-          continue;
-        }
-
-        const img = pickInlineImageFromResponse(json);
-        if (img) {
-          resultDataUrl = `data:${img.mimeType};base64,${img.data}`;
-          break outer;
-        }
-
-        const fr = json.candidates?.[0]?.finishReason;
-        lastErr = new Error(
-          fr ? `No image in response (finishReason: ${fr}).` : 'No image in response (empty candidates or parts).'
-        );
-      } catch (e) {
-        lastErr = e;
-        console.warn(`[postcard] worker REST model=${model}`, formatGenaiError(e));
+      const text = await res.text();
+      let json: GenContentResponse & { error?: { message?: string; code?: number } };
+      try {
+        json = JSON.parse(text) as typeof json;
+      } catch {
+        lastErr = new Error(text.slice(0, 300));
+        return false;
       }
+
+      if (!res.ok) {
+        const msg = json?.error?.message || text.slice(0, 300);
+        lastErr = new Error(msg);
+        return false;
+      }
+
+      const img = pickInlineImageFromResponse(json);
+      if (img) {
+        resultDataUrl = `data:${img.mimeType};base64,${img.data}`;
+        return true;
+      }
+
+      const fr = json.candidates?.[0]?.finishReason;
+      lastErr = new Error(
+        fr ? `No image in response (finishReason: ${fr}).` : 'No image in response (empty candidates or parts).'
+      );
+    } catch (e) {
+      lastErr = e;
+      console.warn(`[postcard] worker REST model=${model}`, formatGenaiError(e));
+    }
+    return false;
+  };
+
+  outer: for (const withImage of [true, false] as const) {
+    for (const model of POSTCARD_IMAGE_MODELS) {
+      if (await tryModel(model, withImage)) break outer;
     }
   }
 
