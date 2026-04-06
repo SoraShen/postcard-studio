@@ -574,6 +574,33 @@ const TRANSLATIONS: Record<string, any> = {
   }
 };
 
+/** Mobile Safari often blocks data: URLs on synthetic clicks; blob URLs work better. */
+function triggerPngDownload(canvas: HTMLCanvasElement, filename: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) {
+          reject(new Error('toBlob failed'));
+          return;
+        }
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.rel = 'noopener';
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        resolve();
+      },
+      'image/png',
+      1.0
+    );
+  });
+}
+
 // --- Components ---
 
 export default function App() {
@@ -606,7 +633,9 @@ export default function App() {
   const [showPasswordInput, setShowPasswordInput] = useState(false);
   const [password, setPassword] = useState("");
   const [isMagicActive, setIsMagicActive] = useState(false);
-  
+  const [downloadMenuOpen, setDownloadMenuOpen] = useState(false);
+  const downloadMenuRef = useRef<HTMLDivElement>(null);
+
   const t = TRANSLATIONS[language];
   
   // Cropping State
@@ -643,6 +672,21 @@ export default function App() {
   useEffect(() => {
     document.body.className = `${selectedHoliday.bgColor} transition-colors duration-1000`;
   }, [selectedHoliday]);
+
+  useEffect(() => {
+    if (!downloadMenuOpen) return;
+    const close = (e: MouseEvent | TouchEvent) => {
+      if (downloadMenuRef.current && !downloadMenuRef.current.contains(e.target as Node)) {
+        setDownloadMenuOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', close);
+    document.addEventListener('touchstart', close, { passive: true });
+    return () => {
+      document.removeEventListener('mousedown', close);
+      document.removeEventListener('touchstart', close);
+    };
+  }, [downloadMenuOpen]);
 
   const handleImageUpload = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -964,6 +1008,7 @@ export default function App() {
     if (!generatedImage) return;
 
     playSound('paper');
+    setDownloadMenuOpen(false);
 
     try {
       const frontImg = await createImage(generatedImage);
@@ -1019,13 +1064,8 @@ export default function App() {
         ctx.fillStyle = 'white';
         ctx.fillRect(0, frontImg.height + borderSize * 2, canvas.width, frontImg.height + borderSize * 2);
         ctx.drawImage(backCanvas, borderSize, frontImg.height + borderSize * 2 + borderSize);
-        
-        const link = document.createElement('a');
-        link.href = canvas.toDataURL('image/png');
-        link.download = `postcard-stitched-${selectedHoliday.id}.png`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+
+        await triggerPngDownload(canvas, `postcard-stitched-${selectedHoliday.id}.png`);
       } else {
         // Phantom Tank Mode (Color Front Optimized)
         canvas.width = frontImg.width;
@@ -1069,13 +1109,8 @@ export default function App() {
         }
         
         ctx.putImageData(outputData, 0, 0);
-        
-        const link = document.createElement('a');
-        link.href = canvas.toDataURL('image/png');
-        link.download = `postcard-hidden-${selectedHoliday.id}.png`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+
+        await triggerPngDownload(canvas, `postcard-hidden-${selectedHoliday.id}.png`);
       }
     } catch (err) {
       console.error("Download error:", err);
@@ -1706,19 +1741,34 @@ export default function App() {
                     {t.backToStudio}
                   </button>
 
-                  <div className="relative group/download">
-                    <button 
+                  <div ref={downloadMenuRef} className="relative group/download">
+                    <button
+                      type="button"
+                      aria-expanded={downloadMenuOpen}
+                      aria-haspopup="menu"
+                      onClick={() => {
+                        if (window.matchMedia('(hover: none)').matches) {
+                          setDownloadMenuOpen((o) => !o);
+                        }
+                      }}
                       className="py-3 px-8 rounded-full bg-white border border-slate-200 text-slate-600 font-medium hover:bg-slate-50 transition-all flex items-center gap-2"
                     >
                       <Upload size={18} className="rotate-180" />
                       {t.download}
                       <ChevronDown size={16} />
                     </button>
-                    
-                    <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden opacity-0 invisible group-hover/download:opacity-100 group-hover/download:visible transition-all z-30">
-                      <button 
+
+                    <div
+                      className={`absolute top-full left-1/2 z-50 mt-2 w-64 -translate-x-1/2 overflow-hidden rounded-2xl border border-slate-100 bg-white shadow-xl transition-all ${
+                        downloadMenuOpen
+                          ? 'visible opacity-100'
+                          : 'invisible opacity-0 md:group-hover/download:visible md:group-hover/download:opacity-100'
+                      }`}
+                    >
+                      <button
+                        type="button"
                         onClick={() => handleDownload('stitched')}
-                        className="w-full px-4 py-3 text-left text-sm hover:bg-slate-50 flex items-center gap-3 transition-colors"
+                        className="flex w-full items-center gap-3 px-4 py-3 text-left text-sm transition-colors hover:bg-slate-50"
                       >
                         <div className="w-8 h-8 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
                           <ImageIcon size={16} />
@@ -1728,9 +1778,10 @@ export default function App() {
                           <p className="text-[10px] text-slate-400">Front + Back combined</p>
                         </div>
                       </button>
-                      <button 
+                      <button
+                        type="button"
                         onClick={() => handleDownload('phantom')}
-                        className="w-full px-4 py-3 text-left text-sm hover:bg-slate-50 flex items-center gap-3 border-t border-slate-50 transition-colors"
+                        className="flex w-full items-center gap-3 border-t border-slate-50 px-4 py-3 text-left text-sm transition-colors hover:bg-slate-50"
                       >
                         <div className="w-8 h-8 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center">
                           <Sparkles size={16} />
