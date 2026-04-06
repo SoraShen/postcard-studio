@@ -576,6 +576,21 @@ const TRANSLATIONS: Record<string, any> = {
   }
 };
 
+const CREDITS_STORAGE_KEY = 'postcard-studio-credits';
+const DEFAULT_CREDITS = 8;
+
+function readStoredCredits(): number {
+  try {
+    const raw = localStorage.getItem(CREDITS_STORAGE_KEY);
+    if (raw == null) return DEFAULT_CREDITS;
+    const n = Number.parseInt(raw, 10);
+    if (!Number.isFinite(n) || n < 0) return DEFAULT_CREDITS;
+    return Math.min(n, 1_000_000);
+  } catch {
+    return DEFAULT_CREDITS;
+  }
+}
+
 function anchorDownloadPng(blob: Blob, filename: string): void {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -665,7 +680,7 @@ export default function App() {
   const [showEmailInput, setShowEmailInput] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasApiKey, setHasApiKey] = useState<boolean | null>(null);
-  const [credits, setCredits] = useState(8);
+  const [credits, setCredits] = useState(readStoredCredits);
   const [showRechargeModal, setShowRechargeModal] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<'link' | 'alipay'>('link');
   /** Fixed on-image title position for the AI prompt (no drag UI). */
@@ -690,6 +705,14 @@ export default function App() {
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(CREDITS_STORAGE_KEY, String(credits));
+    } catch {
+      /* quota / private mode */
+    }
+  }, [credits]);
 
   // Check for API key on mount
   useEffect(() => {
