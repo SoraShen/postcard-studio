@@ -820,8 +820,8 @@ export default function App() {
             return;
           }
 
-          // Limit initial upload to 2048px to avoid browser lag
-          const MAX_UPLOAD_DIM = 2048;
+          // Limit initial upload size (crop UI only; final API payload is smaller)
+          const MAX_UPLOAD_DIM = 1536;
           let width = img.width;
           let height = img.height;
           if (width > MAX_UPLOAD_DIM || height > MAX_UPLOAD_DIM) {
@@ -833,7 +833,7 @@ export default function App() {
           canvas.width = width;
           canvas.height = height;
           ctx.drawImage(img, 0, 0, width, height);
-          setUploadedImage(canvas.toDataURL('image/jpeg', 0.9));
+          setUploadedImage(canvas.toDataURL('image/jpeg', 0.85));
         } catch (err) {
           setUploadedImage(result);
         }
@@ -865,8 +865,8 @@ export default function App() {
 
     if (!ctx) return null;
 
-    // Pre-processing: Limit maximum dimensions to 1024px to save tokens and time
-    const MAX_DIMENSION = 1024;
+    // Pre-processing: cap longest edge before Gemini (was 1024; smaller = fewer image tokens)
+    const MAX_DIMENSION = 768;
     let targetWidth = pixelCrop.width;
     let targetHeight = pixelCrop.height;
 
@@ -891,8 +891,7 @@ export default function App() {
       targetHeight
     );
 
-    // Use JPEG with 0.8 quality for good balance between size and quality
-    return canvas.toDataURL('image/jpeg', 0.8);
+    return canvas.toDataURL('image/jpeg', 0.75);
   };
 
   const handleConfirmCrop = async () => {
