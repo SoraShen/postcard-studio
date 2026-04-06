@@ -20,6 +20,7 @@ import {
   Check
 } from 'lucide-react';
 import { formatGenaiError, runGeminiPostcardGeneration } from "@/src/lib/geminiPostcardGeneration";
+import { runGeminiPostcardViaWorkerRest } from "@/src/lib/geminiWorkerRest";
 
 // --- Types & Globals ---
 
@@ -772,6 +773,7 @@ export default function App() {
 
     try {
       const useProxy = import.meta.env.VITE_USE_GEMINI_PROXY === 'true';
+      const workerBase = (import.meta.env.VITE_GEMINI_WORKER_BASE || '').replace(/\/$/, '');
       const backendBase = (import.meta.env.VITE_GEMINI_BACKEND_URL || '').replace(/\/$/, '');
 
       const parsed = parseDataUrlImage(uploadedImage);
@@ -810,28 +812,36 @@ export default function App() {
       let resultDataUrl: string;
 
       if (useProxy) {
-        const url = `${backendBase || ''}/api/generate-postcard`;
-        const res = await fetch(url, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            prompt,
-            mimeType: parsed.mimeType,
+        if (workerBase) {
+          resultDataUrl = await runGeminiPostcardViaWorkerRest(workerBase, {
             imageBase64: parsed.base64,
-          }),
-        });
-        const data = (await res.json().catch(() => ({}))) as { dataUrl?: string; error?: string };
-        if (!res.ok) {
-          throw new Error(
-            typeof data.error === 'string' && data.error
-              ? data.error
-              : res.statusText || 'Image proxy request failed.'
-          );
+            mimeType: parsed.mimeType,
+            prompt,
+          });
+        } else {
+          const url = `${backendBase || ''}/api/generate-postcard`;
+          const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              prompt,
+              mimeType: parsed.mimeType,
+              imageBase64: parsed.base64,
+            }),
+          });
+          const data = (await res.json().catch(() => ({}))) as { dataUrl?: string; error?: string };
+          if (!res.ok) {
+            throw new Error(
+              typeof data.error === 'string' && data.error
+                ? data.error
+                : res.statusText || 'Image proxy request failed.'
+            );
+          }
+          if (typeof data.dataUrl !== 'string' || !data.dataUrl) {
+            throw new Error('Invalid response from image proxy.');
+          }
+          resultDataUrl = data.dataUrl;
         }
-        if (typeof data.dataUrl !== 'string' || !data.dataUrl) {
-          throw new Error('Invalid response from image proxy.');
-        }
-        resultDataUrl = data.dataUrl;
       } else {
         const apiKey = (
           import.meta.env.VITE_GEMINI_API_KEY?.trim() ||
