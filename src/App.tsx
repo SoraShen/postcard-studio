@@ -499,7 +499,8 @@ const TRANSLATIONS: Record<string, any> = {
     enterEmail: "Enter recipient email",
     send: "Send",
     rechargeTitle: "Top Up Credits",
-    rechargeDesc: "Choose a plan to continue creating magical postcards.",
+    rechargeDesc:
+      "Each generation costs 5 credits. You start with 15 credits (~3 postcards). Pick a pack when you need more.",
     popular: "Popular",
     bestValue: "Best Value",
     customTheme: "Custom Theme",
@@ -553,7 +554,8 @@ const TRANSLATIONS: Record<string, any> = {
     enterEmail: "输入收件人邮箱",
     send: "发送",
     rechargeTitle: "充值积分",
-    rechargeDesc: "选择一个方案以继续创作魔幻明信片。",
+    rechargeDesc:
+      "每次生成消耗 5 积分；默认赠送 15 积分，约可免费生成 3 张。需要更多时再选下方套餐。",
     popular: "热门",
     bestValue: "超值",
     customTheme: "自定义主题",
@@ -578,7 +580,8 @@ const TRANSLATIONS: Record<string, any> = {
 };
 
 const CREDITS_STORAGE_KEY = 'postcard-studio-credits';
-const DEFAULT_CREDITS = 8;
+/** 5 credits per generation → 15 allows 3 free postcards for new visitors */
+const DEFAULT_CREDITS = 15;
 
 function readStoredCredits(): number {
   try {
@@ -1417,7 +1420,9 @@ export default function App() {
   };
 
   return (
-    <div className={`min-h-screen flex flex-col items-center p-4 md:p-8 max-w-5xl mx-auto ${isMagicActive ? 'animate-pulse bg-gradient-to-r from-purple-100 via-pink-100 to-amber-100' : ''}`}>
+    <div
+      className={`min-h-screen flex flex-col items-center px-3 py-3 sm:px-4 sm:py-4 md:p-8 max-w-5xl mx-auto ${isMagicActive ? 'animate-pulse bg-gradient-to-r from-purple-100 via-pink-100 to-amber-100' : ''}`}
+    >
       {/* Magic Celebration */}
       <AnimatePresence>
         {isMagicActive && (
@@ -1433,14 +1438,14 @@ export default function App() {
       </AnimatePresence>
 
       {/* Header */}
-      <header className="w-full flex flex-col md:flex-row justify-between items-center mb-12 gap-6">
-        <div className="flex items-center gap-6">
-          <div className="flex items-center gap-3">
-            <div className={`p-2 rounded-xl bg-white shadow-sm border border-slate-100 ${selectedHoliday.accentColor}`}>
-              <Sparkles size={28} />
+      <header className="w-full flex flex-col gap-4 md:flex-row md:justify-between md:items-center mb-8 md:mb-12">
+        <div className="flex flex-col sm:flex-row items-center gap-4 w-full md:w-auto">
+          <div className="flex items-center gap-2.5 sm:gap-3 w-full sm:w-auto justify-center sm:justify-start">
+            <div className={`p-2 rounded-xl bg-white shadow-sm border border-slate-100 shrink-0 ${selectedHoliday.accentColor}`}>
+              <Sparkles size={26} />
             </div>
-            <div className="flex flex-col items-center md:items-start gap-0.5">
-            <h1 className="text-2xl font-semibold tracking-tight select-none text-center md:text-left">
+            <div className="flex flex-col items-center sm:items-start gap-0.5 min-w-0 flex-1">
+            <h1 className="text-lg sm:text-xl md:text-2xl font-semibold tracking-tight select-none text-center sm:text-left leading-snug">
               <span
                 role={generatedImage ? 'button' : undefined}
                 tabIndex={generatedImage ? 0 : undefined}
@@ -1486,36 +1491,36 @@ export default function App() {
             )}
           </div>
           
-          <div className="flex items-center gap-2 bg-white px-4 py-2 rounded-full border border-slate-100 shadow-sm">
-            <div className="flex items-center gap-1.5 text-amber-600 font-bold">
-              <Sparkles size={16} />
-              <span>{credits} {t.credits}</span>
+          <div className="flex items-center gap-2 bg-white px-3 py-2 sm:px-4 rounded-full border border-slate-100 shadow-sm shrink-0">
+            <div className="flex items-center gap-1.5 text-amber-600 font-bold text-sm sm:text-base">
+              <Sparkles size={16} className="shrink-0" />
+              <span className="whitespace-nowrap">{credits} {t.credits}</span>
             </div>
             <button 
               onClick={() => setShowRechargeModal(true)}
-              className="ml-2 text-xs font-bold text-slate-400 hover:text-slate-600 uppercase tracking-wider"
+              className="ml-1 text-[11px] sm:text-xs font-bold text-slate-400 hover:text-slate-600 uppercase tracking-wider shrink-0"
             >
               {t.topUp}
             </button>
           </div>
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto md:shrink-0">
           <button 
             onClick={() => setLanguage(language === 'en' ? 'zh' : 'en')}
-            className="px-4 py-2 bg-white border border-slate-200 rounded-full text-sm font-medium shadow-sm hover:bg-slate-50 transition-all"
+            className="w-full sm:w-auto px-4 py-2.5 bg-white border border-slate-200 rounded-full text-sm font-medium shadow-sm hover:bg-slate-50 transition-all"
           >
             {language === 'en' ? '中文' : 'English'}
           </button>
 
-          <div className="relative group">
+          <div className="relative group w-full sm:w-auto min-w-0">
               <select 
                 value={selectedHoliday.id}
                 onChange={(e) => {
                   const holiday = HOLIDAYS.find(h => h.id === e.target.value);
                   if (holiday) setSelectedHoliday(holiday);
                 }}
-                className="appearance-none bg-white border border-slate-200 rounded-full px-6 py-2.5 pr-12 shadow-sm hover:border-slate-300 transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-slate-200 font-medium"
+                className="appearance-none w-full sm:min-w-[12rem] bg-white border border-slate-200 rounded-full px-4 sm:px-6 py-2.5 pr-10 sm:pr-12 shadow-sm hover:border-slate-300 transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-slate-200 font-medium text-sm sm:text-base"
               >
                 {HOLIDAYS.map(h => (
                   <option key={h.id} value={h.id}>
@@ -1523,7 +1528,7 @@ export default function App() {
                   </option>
                 ))}
               </select>
-            <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400" size={18} />
+            <ChevronDown className="absolute right-3 sm:right-4 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400" size={18} />
           </div>
         </div>
       </header>
@@ -1558,9 +1563,9 @@ export default function App() {
                 <div className="p-6 rounded-full bg-slate-50 group-hover:scale-110 transition-transform duration-500">
                   <Upload className="text-slate-400 group-hover:text-slate-600" size={40} />
                 </div>
-                <div className="text-center">
-                  <p className="text-lg font-medium text-slate-700">{t.uploadPhoto}</p>
-                  <p className="text-sm text-slate-400 mt-1">{t.dragDrop}</p>
+                <div className="text-center px-2">
+                  <p className="text-base sm:text-lg font-medium text-slate-700">{t.uploadPhoto}</p>
+                  <p className="text-sm sm:text-base text-slate-400 mt-1.5 leading-snug">{t.dragDrop}</p>
                 </div>
                 <input 
                   type="file" 
@@ -1578,10 +1583,10 @@ export default function App() {
               key="cropping"
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="w-full max-w-2xl flex flex-col items-center gap-6"
+              className="w-full max-w-2xl flex flex-col items-center gap-4 sm:gap-6"
             >
               <div
-                className="relative w-full rounded-3xl overflow-hidden shadow-2xl border-8 border-white bg-slate-900"
+                className="relative w-full rounded-2xl sm:rounded-3xl overflow-hidden shadow-2xl border-4 sm:border-8 border-white bg-slate-900"
                 style={{ aspectRatio: cropFrameAspect }}
               >
                 <Cropper
@@ -1595,10 +1600,10 @@ export default function App() {
                 />
               </div>
               
-              <div className="w-full flex flex-col gap-6 bg-white p-6 rounded-3xl shadow-sm">
-                <div className="flex flex-col gap-3">
-                  <span className="text-sm font-medium text-slate-500 ml-1">{t.aspectRatio || 'Aspect Ratio'}</span>
-                  <div className="flex flex-wrap gap-2">
+              <div className="w-full flex flex-col gap-4 sm:gap-6 bg-white p-4 sm:p-6 rounded-2xl sm:rounded-3xl shadow-sm">
+                <div className="flex flex-col gap-2 sm:gap-3">
+                  <span className="text-sm sm:text-base font-medium text-slate-500 ml-0.5 sm:ml-1">{t.aspectRatio || 'Aspect Ratio'}</span>
+                  <div className="flex flex-wrap gap-1.5 sm:gap-2">
                     {[
                       { label: 'Free', value: undefined },
                       { label: '1:1', value: 1 },
@@ -1610,7 +1615,7 @@ export default function App() {
                       <button
                         key={ratio.label}
                         onClick={() => setAspectRatio(ratio.value)}
-                        className={`px-4 py-2 rounded-xl text-xs font-semibold transition-all border ${
+                        className={`px-3 py-2 sm:px-4 rounded-lg sm:rounded-xl text-[11px] sm:text-xs font-semibold transition-all border ${
                           aspectRatio === ratio.value
                             ? 'bg-slate-900 text-white border-slate-900'
                             : 'bg-slate-50 text-slate-500 border-slate-100 hover:border-slate-300'
@@ -1622,8 +1627,8 @@ export default function App() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-4">
-                  <span className="text-sm font-medium text-slate-500">{t.zoom}</span>
+                <div className="flex items-center gap-3 sm:gap-4">
+                  <span className="text-sm sm:text-base font-medium text-slate-500 shrink-0">{t.zoom}</span>
                   <input
                     type="range"
                     value={zoom}
@@ -1661,11 +1666,11 @@ export default function App() {
               key="preview"
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="w-full max-w-2xl flex flex-col items-center gap-8"
+              className="w-full max-w-2xl flex flex-col items-center gap-5 sm:gap-8"
             >
               <div
                 style={{ aspectRatio: cropFrameAspect }}
-                className="relative w-full rounded-3xl overflow-hidden shadow-2xl border-8 border-white"
+                className="relative w-full rounded-2xl sm:rounded-3xl overflow-hidden shadow-2xl border-4 sm:border-8 border-white"
               >
                 <img src={uploadedImage} alt="Preview" className="w-full h-full object-cover select-none" />
                 
@@ -1677,17 +1682,17 @@ export default function App() {
                     x: "-50%",
                     y: "-50%"
                   }}
-                  className="absolute z-10 p-4 bg-white/20 backdrop-blur-md border border-white/30 rounded-xl flex flex-col items-center text-center shadow-lg pointer-events-none"
+                  className="absolute z-10 p-2.5 sm:p-4 max-w-[min(92%,18rem)] sm:max-w-none bg-white/20 backdrop-blur-md border border-white/30 rounded-lg sm:rounded-xl flex flex-col items-center text-center shadow-lg pointer-events-none"
                 >
                   <p 
                     style={{ fontSize: `${textSize}px` }}
-                    className="font-serif italic text-white drop-shadow-md leading-none"
+                    className="font-serif italic text-white drop-shadow-md leading-tight sm:leading-none"
                   >
                     {selectedHoliday.id === 'custom' ? (customTheme || t.customTheme) : (language === 'zh' ? selectedHoliday.zhName : selectedHoliday.name)}
                   </p>
                   <p 
                     style={{ fontSize: `${textSize * 0.5}px` }}
-                    className="text-white/80 drop-shadow-md mt-1 max-w-[120px] line-clamp-1"
+                    className="text-white/80 drop-shadow-md mt-1 max-w-[min(100%,10rem)] sm:max-w-[140px] line-clamp-2 sm:line-clamp-1 leading-snug"
                   >
                     {customBlessing.trim() || (language === 'zh' ? selectedHoliday.zhShortBlessing : selectedHoliday.shortBlessing)}
                   </p>
@@ -1702,15 +1707,15 @@ export default function App() {
                 </button>
               </div>
 
-              <div className="w-full flex flex-col gap-6">
+              <div className="w-full flex flex-col gap-5 sm:gap-6">
                 <div className="flex flex-col gap-2">
-                  <label className="text-sm font-medium text-slate-500 ml-2">{t.selectStyle}</label>
-                  <div className="grid grid-cols-3 gap-3">
+                  <label className="text-sm sm:text-base font-medium text-slate-500 ml-1 sm:ml-2">{t.selectStyle}</label>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3">
                     {STYLES.map((style) => (
                       <button
                         key={style.id}
                         onClick={() => setSelectedStyle(style)}
-                        className={`py-3 px-2 rounded-2xl text-sm font-medium transition-all border-2 ${
+                        className={`py-2.5 sm:py-3 px-2 rounded-xl sm:rounded-2xl text-xs sm:text-sm font-medium transition-all border-2 leading-snug ${
                           selectedStyle.id === style.id
                             ? `bg-white border-slate-900 shadow-md ${selectedHoliday.accentColor}`
                             : 'bg-white/50 border-transparent text-slate-400 hover:bg-white hover:border-slate-200'
@@ -1723,9 +1728,9 @@ export default function App() {
                 </div>
 
                 <div className="flex flex-col gap-2">
-                  <div className="flex justify-between items-center px-2">
-                    <label className="text-sm font-medium text-slate-500">{t.textSize}</label>
-                    <span className="text-xs font-bold text-slate-400">{textSize}px</span>
+                  <div className="flex justify-between items-center px-1 sm:px-2">
+                    <label className="text-sm sm:text-base font-medium text-slate-500">{t.textSize}</label>
+                    <span className="text-xs sm:text-sm font-bold text-slate-400 tabular-nums">{textSize}px</span>
                   </div>
                   <input
                     type="range"
@@ -1741,48 +1746,48 @@ export default function App() {
                 {selectedHoliday.id === 'custom' && (
                   <>
                     <div className="flex flex-col gap-2">
-                      <label className="text-sm font-medium text-slate-500 ml-2">{t.customTheme}</label>
+                      <label className="text-sm sm:text-base font-medium text-slate-500 ml-1 sm:ml-2">{t.customTheme}</label>
                       <input 
                         type="text"
                         placeholder={t.themePlaceholder}
                         value={customTheme}
                         onChange={(e) => setCustomTheme(e.target.value)}
-                        className="w-full bg-white border border-slate-200 rounded-2xl px-6 py-4 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-200 transition-all"
+                        className="w-full bg-white border border-slate-200 rounded-2xl px-4 py-3.5 sm:px-6 sm:py-4 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-200 transition-all"
                       />
                     </div>
                     <div className="flex flex-col gap-2">
-                      <label className="text-sm font-medium text-slate-500 ml-2">{t.sceneKeywords}</label>
+                      <label className="text-sm sm:text-base font-medium text-slate-500 ml-1 sm:ml-2">{t.sceneKeywords}</label>
                       <input 
                         type="text"
                         placeholder={t.scenePlaceholder}
                         value={customKeywords}
                         onChange={(e) => setCustomKeywords(e.target.value)}
-                        className="w-full bg-white border border-slate-200 rounded-2xl px-6 py-4 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-200 transition-all"
+                        className="w-full bg-white border border-slate-200 rounded-2xl px-4 py-3.5 sm:px-6 sm:py-4 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-200 transition-all"
                       />
                     </div>
                   </>
                 )}
 
                 <div className="flex flex-col gap-2">
-                  <label className="text-sm font-medium text-slate-500 ml-2">{t.customBlessing}</label>
+                  <label className="text-sm sm:text-base font-medium text-slate-500 ml-1 sm:ml-2">{t.customBlessing}</label>
                   <input 
                     type="text"
                     placeholder={language === 'zh' ? selectedHoliday.zhPlaceholder : selectedHoliday.placeholder}
                     value={customBlessing}
                     onChange={(e) => setCustomBlessing(e.target.value)}
-                    className="w-full bg-white border border-slate-200 rounded-2xl px-6 py-4 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-200 transition-all"
+                    className="w-full bg-white border border-slate-200 rounded-2xl px-4 py-3.5 sm:px-6 sm:py-4 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-200 transition-all"
                   />
                 </div>
 
-                <div className="flex flex-col items-center gap-4 w-full">
+                <div className="flex flex-col items-center gap-3 sm:gap-4 w-full">
                   <button 
                     onClick={handleGenerate}
-                    className={`w-full max-w-xs py-4 px-8 rounded-full bg-slate-900 text-white font-semibold shadow-xl hover:bg-slate-800 hover:-translate-y-1 transition-all flex items-center justify-center gap-3`}
+                    className="w-full max-w-md sm:max-w-xs py-3.5 sm:py-4 px-4 sm:px-8 rounded-full bg-slate-900 text-white text-sm sm:text-base font-semibold shadow-xl hover:bg-slate-800 hover:-translate-y-1 transition-all flex items-center justify-center gap-2 sm:gap-3 text-center leading-snug min-h-[3rem]"
                   >
-                    <Sparkles size={20} />
+                    <Sparkles size={20} className="shrink-0" />
                     {t.createCard.replace('{name}', language === 'zh' ? selectedHoliday.zhName : selectedHoliday.name)}
                   </button>
-                  {error && <p className="text-red-500 text-sm font-medium">{error}</p>}
+                  {error && <p className="text-red-600 text-sm sm:text-base font-medium text-center px-2">{error}</p>}
                 </div>
               </div>
             </motion.div>
@@ -1793,9 +1798,9 @@ export default function App() {
               key="loading"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="flex flex-col items-center gap-8"
+              className="flex flex-col items-center gap-6 sm:gap-8 px-2"
             >
-              <div className="relative w-32 h-32">
+              <div className="relative w-28 h-28 sm:w-32 sm:h-32">
                 <motion.div 
                   animate={{ rotate: 360 }}
                   transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
@@ -1812,9 +1817,9 @@ export default function App() {
                   <ImageIcon size={40} />
                 </motion.div>
               </div>
-              <div className="text-center">
-                <h2 className="text-2xl font-serif italic text-slate-800">{t.magicalPainting}</h2>
-                <p className="text-slate-400 mt-2">{t.aiCrafting}</p>
+              <div className="text-center max-w-md">
+                <h2 className="text-xl sm:text-2xl font-serif italic text-slate-800 leading-snug">{t.magicalPainting}</h2>
+                <p className="text-slate-400 mt-2 text-sm sm:text-base leading-relaxed">{t.aiCrafting}</p>
               </div>
             </motion.div>
           )}
@@ -1824,7 +1829,7 @@ export default function App() {
                   key="result"
                   initial={{ opacity: 0, y: 40 }}
                   animate={{ opacity: 1, y: 0 }}
-                  className="w-full max-w-3xl flex flex-col items-center gap-12 mt-6"
+                  className="w-full max-w-3xl flex flex-col items-center gap-6 sm:gap-10 md:gap-12 mt-4 sm:mt-6"
                 >
                   {/* 3D Card + pointer parallax */}
                   <div
@@ -1853,7 +1858,7 @@ export default function App() {
                       initial={{ opacity: 0, y: 10 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0 }}
-                      className="absolute -top-12 left-1/2 -translate-x-1/2 z-10 bg-slate-900/80 backdrop-blur-md text-white px-4 py-2 rounded-full text-sm font-medium flex items-center gap-2 pointer-events-none shadow-lg"
+                      className="absolute -top-10 sm:-top-12 left-1/2 -translate-x-1/2 z-10 bg-slate-900/80 backdrop-blur-md text-white px-3 py-1.5 sm:px-4 sm:py-2 rounded-full text-xs sm:text-sm font-medium flex items-center gap-1.5 sm:gap-2 pointer-events-none shadow-lg max-w-[calc(100vw-1.5rem)] justify-center text-center leading-snug"
                     >
                       <motion.div
                         animate={{ x: [0, 5, 0] }}
@@ -1873,8 +1878,8 @@ export default function App() {
                   onClick={() => setIsFlipped(!isFlipped)}
                 >
                   {/* Front */}
-                  <div className="absolute inset-0 backface-hidden rounded-none shadow-2xl overflow-hidden bg-white p-4 md:p-6 border border-slate-100">
-                    <div className="w-full h-full rounded-none overflow-hidden relative border-[8px] border-white shadow-inner">
+                  <div className="absolute inset-0 backface-hidden rounded-none shadow-2xl overflow-hidden bg-white p-2 sm:p-3 md:p-6 border border-slate-100">
+                    <div className="w-full h-full rounded-none overflow-hidden relative border-[4px] sm:border-[6px] md:border-[8px] border-white shadow-inner">
                       <motion.div
                         key={`reveal-${postcardRevealKey}`}
                         className="relative z-0 h-full w-full"
@@ -1915,29 +1920,29 @@ export default function App() {
                       aria-hidden
                     />
                     <div
-                      className="relative flex flex-col flex-1 min-h-0 p-5 md:p-7"
+                      className="relative flex flex-col flex-1 min-h-0 p-4 sm:p-5 md:p-7"
                       onClick={(e) => e.stopPropagation()}
                     >
-                      <div className="flex justify-between items-end gap-3 border-b border-slate-200/90 pb-3 mb-6 shrink-0">
-                        <div>
-                          <p className="text-[10px] font-semibold tracking-[0.26em] text-slate-400 uppercase">
+                      <div className="flex justify-between items-end gap-2 sm:gap-3 border-b border-slate-200/90 pb-2.5 sm:pb-3 mb-4 sm:mb-6 shrink-0">
+                        <div className="min-w-0">
+                          <p className="text-[11px] sm:text-[10px] font-semibold tracking-[0.2em] sm:tracking-[0.26em] text-slate-400 uppercase">
                             {t.postcardMark}
                           </p>
-                          <p className="text-[11px] text-slate-400 mt-1 leading-snug max-w-[11rem] md:max-w-none">
+                          <p className="text-xs sm:text-[11px] text-slate-400 mt-1 leading-snug max-w-[13rem] sm:max-w-[11rem] md:max-w-none">
                             {t.postcardHint}
                           </p>
                         </div>
-                        <p className="font-serif italic text-base md:text-lg text-slate-700 text-right leading-tight shrink-0">
+                        <p className="font-serif italic text-sm sm:text-base md:text-lg text-slate-700 text-right leading-tight shrink-0">
                           {language === 'zh' ? selectedHoliday.zhName : selectedHoliday.name}{' '}
-                          <span className="text-slate-400 not-italic text-sm font-sans">2026</span>
+                          <span className="text-slate-400 not-italic text-xs sm:text-sm font-sans">2026</span>
                         </p>
                       </div>
 
-                      <div className="flex min-h-0 flex-1 flex-col gap-5 sm:flex-row sm:gap-6 pt-1">
+                      <div className="flex min-h-0 flex-1 flex-col gap-4 sm:flex-row sm:gap-6 pt-0 sm:pt-1">
                         <div className="flex min-h-0 min-w-0 flex-1 flex-col border-slate-200/80 pr-0 sm:border-r sm:pr-5">
                           <label
                             htmlFor="postcard-blessing"
-                            className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-3 shrink-0"
+                            className="text-xs sm:text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2 sm:mb-3 shrink-0"
                           >
                             {t.blessingLabel}
                           </label>
@@ -1947,15 +1952,15 @@ export default function App() {
                               placeholder={t.writeMessage}
                               value={message}
                               onChange={(e) => setMessage(e.target.value)}
-                              className={`min-h-[8rem] w-full flex-1 resize-none rounded-md bg-transparent border-none focus:ring-0 focus:outline-none text-center text-lg md:text-xl text-slate-700 placeholder:text-slate-300 ${
+                              className={`min-h-[6.5rem] sm:min-h-[8rem] w-full flex-1 resize-none rounded-md bg-transparent border-none focus:ring-0 focus:outline-none text-center text-base sm:text-lg md:text-xl text-slate-700 placeholder:text-slate-300 ${
                                 /[\u4e00-\u9fff]/.test(message)
                                   ? 'font-chinese-handwritten'
                                   : 'font-handwritten'
                               }`}
                               style={{
-                                lineHeight: '1.75rem',
+                                lineHeight: '1.65rem',
                                 backgroundAttachment: 'local',
-                                backgroundImage: `repeating-linear-gradient(transparent, transparent 1.74rem, rgba(148, 163, 184, 0.14) 1.74rem, rgba(148, 163, 184, 0.14) calc(1.74rem + 1px))`,
+                                backgroundImage: `repeating-linear-gradient(transparent, transparent 1.64rem, rgba(148, 163, 184, 0.14) 1.64rem, rgba(148, 163, 184, 0.14) calc(1.64rem + 1px))`,
                               }}
                             />
                           </div>
@@ -1971,7 +1976,7 @@ export default function App() {
                           </div>
                           <label
                             htmlFor="postcard-to"
-                            className="text-[11px] font-semibold text-slate-400 mb-2"
+                            className="text-xs sm:text-[11px] font-semibold text-slate-400 mb-1.5 sm:mb-2"
                           >
                             {t.toLabel}
                           </label>
@@ -1981,7 +1986,7 @@ export default function App() {
                             value={recipientName}
                             onChange={(e) => setRecipientName(e.target.value)}
                             placeholder={t.toPlaceholder}
-                            className={`w-full bg-transparent border-b border-slate-300 focus:border-slate-600 focus:outline-none py-1.5 text-base md:text-lg text-slate-800 placeholder:text-slate-300 placeholder:font-sans ${
+                            className={`w-full bg-transparent border-b border-slate-300 focus:border-slate-600 focus:outline-none py-1.5 text-base sm:text-lg text-slate-800 placeholder:text-slate-300 placeholder:font-sans ${
                               /[\u4e00-\u9fff]/.test(recipientName)
                                 ? 'font-chinese-handwritten'
                                 : 'font-handwritten'
@@ -1993,7 +1998,7 @@ export default function App() {
                           />
                           <label
                             htmlFor="postcard-from"
-                            className="text-[11px] font-semibold text-slate-400 mb-2"
+                            className="text-xs sm:text-[11px] font-semibold text-slate-400 mb-1.5 sm:mb-2"
                           >
                             {t.fromLabel}
                           </label>
@@ -2003,7 +2008,7 @@ export default function App() {
                             value={senderName}
                             onChange={(e) => setSenderName(e.target.value)}
                             placeholder={t.fromPlaceholder}
-                            className={`w-full bg-transparent border-b border-slate-300 focus:border-slate-600 focus:outline-none py-1.5 text-base md:text-lg text-slate-800 placeholder:text-slate-300 placeholder:font-sans ${
+                            className={`w-full bg-transparent border-b border-slate-300 focus:border-slate-600 focus:outline-none py-1.5 text-base sm:text-lg text-slate-800 placeholder:text-slate-300 placeholder:font-sans ${
                               /[\u4e00-\u9fff]/.test(senderName)
                                 ? 'font-chinese-handwritten'
                                 : 'font-handwritten'
@@ -2019,7 +2024,7 @@ export default function App() {
                         e.stopPropagation();
                         setIsFlipped(false);
                       }}
-                      className="relative z-10 flex items-center justify-center gap-2 py-2.5 text-xs font-medium text-slate-500 hover:text-slate-800 hover:bg-slate-100/90 transition-colors border-t border-slate-200/70"
+                      className="relative z-10 flex items-center justify-center gap-2 py-2 sm:py-2.5 text-xs sm:text-sm font-medium text-slate-500 hover:text-slate-800 hover:bg-slate-100/90 transition-colors border-t border-slate-200/70"
                     >
                       <ArrowRight className="rotate-180" size={14} aria-hidden />
                       {t.showFront}
@@ -2030,11 +2035,11 @@ export default function App() {
               </div>
 
               {/* Actions */}
-              <div className="flex flex-col items-center gap-6 w-full">
-                <div className="flex flex-wrap justify-center gap-4 w-full">
+              <div className="flex flex-col items-center gap-4 sm:gap-6 w-full px-1">
+                <div className="flex flex-col sm:flex-row flex-wrap justify-center gap-3 sm:gap-4 w-full max-w-lg sm:max-w-none">
                   <button 
                     onClick={reset}
-                    className="py-3 px-8 rounded-full bg-white border border-slate-200 text-slate-600 font-medium hover:bg-slate-50 transition-all flex items-center gap-2"
+                    className="w-full sm:w-auto justify-center py-3 px-6 sm:px-8 rounded-full bg-white border border-slate-200 text-slate-600 text-sm sm:text-base font-medium hover:bg-slate-50 transition-all flex items-center gap-2"
                   >
                     <RefreshCw size={18} />
                     {t.backToStudio}
@@ -2050,9 +2055,9 @@ export default function App() {
                           setDownloadMenuOpen((o) => !o);
                         }
                       }}
-                      className="py-3 px-8 rounded-full bg-white border border-slate-200 text-slate-600 font-medium hover:bg-slate-50 transition-all flex items-center gap-2"
+                      className="w-full sm:w-auto justify-center py-3 px-6 sm:px-8 rounded-full bg-white border border-slate-200 text-slate-600 text-sm sm:text-base font-medium hover:bg-slate-50 transition-all flex items-center gap-2"
                     >
-                      <Upload size={18} className="rotate-180" />
+                      <Upload size={18} className="rotate-180 shrink-0" />
                       {t.download}
                       <ChevronDown size={16} />
                     </button>
@@ -2096,7 +2101,7 @@ export default function App() {
                   {!isSent ? (
                     <button 
                       onClick={handleSendClick}
-                      className="py-3 px-10 rounded-full bg-slate-900 text-white font-semibold shadow-lg hover:bg-slate-800 hover:-translate-y-1 transition-all flex items-center gap-2"
+                      className="w-full sm:w-auto justify-center py-3 px-8 sm:px-10 rounded-full bg-slate-900 text-white text-sm sm:text-base font-semibold shadow-lg hover:bg-slate-800 hover:-translate-y-1 transition-all flex items-center gap-2"
                     >
                       <Send size={18} />
                       {t.sendByEmail}
@@ -2127,10 +2132,10 @@ export default function App() {
                       initial={{ scale: 0.9, y: 20 }}
                       animate={{ scale: 1, y: 0 }}
                       exit={{ scale: 0.9, y: 20 }}
-                      className="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl"
+                      className="bg-white rounded-2xl sm:rounded-3xl p-6 sm:p-8 w-full max-w-md shadow-2xl"
                     >
-                      <h3 className="text-xl font-semibold mb-2">{t.sendByEmail}</h3>
-                      <p className="text-slate-500 mb-6 text-sm">{language === 'zh' ? '输入收件人的电子邮件地址以邮寄这件水彩杰作。' : 'Enter the recipient\'s email address to mail this watercolor masterpiece.'}</p>
+                      <h3 className="text-lg sm:text-xl font-semibold mb-2">{t.sendByEmail}</h3>
+                      <p className="text-slate-500 mb-5 sm:mb-6 text-sm sm:text-base leading-relaxed">{language === 'zh' ? '输入收件人的电子邮件地址以邮寄这件水彩杰作。' : 'Enter the recipient\'s email address to mail this watercolor masterpiece.'}</p>
                       
                       <div className="flex items-center gap-3 bg-slate-50 rounded-2xl px-4 py-3 border border-slate-200 mb-6">
                         <Mail size={20} className="text-slate-400" />
@@ -2175,15 +2180,15 @@ export default function App() {
                       initial={{ scale: 0.9, y: 20 }}
                       animate={{ scale: 1, y: 0 }}
                       exit={{ scale: 0.9, y: 20 }}
-                      className="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl"
+                      className="bg-white rounded-2xl sm:rounded-3xl p-6 sm:p-8 w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto"
                     >
-                      <div className="flex items-center gap-3 mb-6">
-                        <div className="p-3 rounded-2xl bg-amber-50 text-amber-600">
+                      <div className="flex items-start gap-3 mb-5 sm:mb-6">
+                        <div className="p-2.5 sm:p-3 rounded-2xl bg-amber-50 text-amber-600 shrink-0">
                           <Sparkles size={24} />
                         </div>
-                        <div>
-                          <h3 className="text-xl font-semibold">{t.rechargeTitle}</h3>
-                          <p className="text-slate-500 text-sm">{language === 'zh' ? '每次生成消耗 5 积分。' : 'Each generation costs 5 credits.'}</p>
+                        <div className="min-w-0">
+                          <h3 className="text-lg sm:text-xl font-semibold">{t.rechargeTitle}</h3>
+                          <p className="text-slate-500 text-sm sm:text-base leading-relaxed mt-1">{t.rechargeDesc}</p>
                         </div>
                       </div>
 
@@ -2263,13 +2268,13 @@ export default function App() {
                       initial={{ scale: 0.9, y: 20 }}
                       animate={{ scale: 1, y: 0 }}
                       exit={{ scale: 0.9, y: 20 }}
-                      className="bg-white rounded-3xl p-8 w-full max-w-md shadow-2xl"
+                      className="bg-white rounded-2xl sm:rounded-3xl p-6 sm:p-8 w-full max-w-md shadow-2xl"
                     >
-                      <div className="flex items-center gap-3 mb-6">
-                        <div className="p-3 rounded-2xl bg-purple-50 text-purple-600">
+                      <div className="flex items-center gap-3 mb-5 sm:mb-6">
+                        <div className="p-2.5 sm:p-3 rounded-2xl bg-purple-50 text-purple-600 shrink-0">
                           <Sparkles size={24} />
                         </div>
-                        <h3 className="text-xl font-semibold">{t.unlockCredits}</h3>
+                        <h3 className="text-lg sm:text-xl font-semibold leading-snug">{t.unlockCredits}</h3>
                       </div>
                       
                       <div className="bg-slate-50 rounded-2xl px-4 py-3 border border-slate-200 mb-6">
@@ -2304,8 +2309,8 @@ export default function App() {
                 {/* Envelope animation overlay removed as it's now part of the result flow */}
               </AnimatePresence>
 
-              <p className="text-slate-400 text-sm flex items-center gap-2">
-                <ArrowRight size={14} />
+              <p className="text-slate-400 text-xs sm:text-sm flex items-center justify-center gap-2 text-center px-2 leading-snug">
+                <ArrowRight size={14} className="shrink-0" aria-hidden />
                 {t.clickToFlip}
               </p>
             </motion.div>
@@ -2314,7 +2319,7 @@ export default function App() {
       </main>
 
       {/* Footer */}
-      <footer className="mt-16 py-8 border-t border-slate-100 w-full flex flex-col md:flex-row justify-between items-center gap-4 text-slate-400 text-sm">
+      <footer className="mt-10 sm:mt-16 py-6 sm:py-8 border-t border-slate-100 w-full flex flex-col md:flex-row justify-between items-center gap-3 sm:gap-4 text-slate-400 text-xs sm:text-sm px-1">
         <p>© 2026 {t.title}. Powered by AI.</p>
         <div className="flex gap-6">
           <a href="#" className="hover:text-slate-600 transition-colors">Privacy</a>
