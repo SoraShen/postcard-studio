@@ -37,3 +37,29 @@
 .preserve-3d {
   transform-style: preserve-3d;
 }
+
+@keyframes postcard-breathe {
+  0%,
+  100% {
+    filter: brightness(1) saturate(1);
+    transform: scale(1);
+  }
+  50% {
+    filter: brightness(1.05) saturate(1.03);
+    transform: scale(1.007);
+  }
+}
+
+.postcard-breathe-img {
+  animation: postcard-breathe 5.75s ease-in-out infinite;
+  transform-origin: center center;
+  will-change: filter, transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .postcard-breathe-img {
+    animation: none;
+    filter: none;
+    transform: none;
+  }
+}

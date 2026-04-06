@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { formatGenaiError, runGeminiPostcardGeneration } from "@/src/lib/geminiPostcardGeneration";
 import { runGeminiPostcardViaWorkerRest } from "@/src/lib/geminiWorkerRest";
+import { PostcardAmbientParticles } from "@/src/components/PostcardAmbientParticles";
 
 // --- Types & Globals ---
 
@@ -692,6 +693,10 @@ export default function App() {
   const [isMagicActive, setIsMagicActive] = useState(false);
   const [downloadMenuOpen, setDownloadMenuOpen] = useState(false);
   const downloadMenuRef = useRef<HTMLDivElement>(null);
+  const [reduceMotion, setReduceMotion] = useState(false);
+  const [postcardRevealKey, setPostcardRevealKey] = useState(0);
+  const [parallaxTilt, setParallaxTilt] = useState({ rx: 0, ry: 0, smooth: true });
+  const postcardTiltShellRef = useRef<HTMLDivElement>(null);
 
   const t = TRANSLATIONS[language];
   
@@ -713,6 +718,30 @@ export default function App() {
       /* quota / private mode */
     }
   }, [credits]);
+
+  useEffect(() => {
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)');
+    setReduceMotion(mq.matches);
+    const fn = () => setReduceMotion(mq.matches);
+    mq.addEventListener('change', fn);
+    return () => mq.removeEventListener('change', fn);
+  }, []);
+
+  useEffect(() => {
+    if (reduceMotion || !generatedImage) return;
+    if (!window.matchMedia('(pointer: coarse)').matches) return;
+
+    const onOrient = (e: DeviceOrientationEvent) => {
+      if (e.gamma == null || e.beta == null) return;
+      const max = 10;
+      const ry = Math.max(-max, Math.min(max, (e.gamma / 50) * max));
+      const rx = Math.max(-max * 0.72, Math.min(max * 0.72, ((e.beta - 38) / 42) * max * 0.72));
+      setParallaxTilt({ rx: -rx, ry, smooth: false });
+    };
+
+    window.addEventListener('deviceorientation', onOrient, true);
+    return () => window.removeEventListener('deviceorientation', onOrient, true);
+  }, [reduceMotion, generatedImage]);
 
   // Check for API key on mount
   useEffect(() => {
@@ -994,6 +1023,7 @@ export default function App() {
       }
 
       setGeneratedImage(resultDataUrl);
+      setPostcardRevealKey((k) => k + 1);
       setCredits((prev) => prev - 5);
     } catch (err: unknown) {
       console.error('Generation error:', err);
@@ -1266,6 +1296,7 @@ export default function App() {
     setIsSent(false);
     setShowEmailInput(false);
     setError(null);
+    setParallaxTilt({ rx: 0, ry: 0, smooth: true });
   };
 
   const handleEasterEggClick = () => {
@@ -1285,6 +1316,40 @@ export default function App() {
       setPassword("");
     }
   };
+
+  const handlePostcardPointerMove = useCallback(
+    (e: MouseEvent<HTMLDivElement>) => {
+      if (reduceMotion || !postcardTiltShellRef.current) return;
+      const rect = postcardTiltShellRef.current.getBoundingClientRect();
+      const px = ((e.clientX - rect.left) / rect.width - 0.5) * 2;
+      const py = ((e.clientY - rect.top) / rect.height - 0.5) * 2;
+      const max = 9.5;
+      setParallaxTilt({ rx: -py * max * 0.78, ry: px * max, smooth: false });
+    },
+    [reduceMotion]
+  );
+
+  const handlePostcardPointerLeave = useCallback(() => {
+    setParallaxTilt({ rx: 0, ry: 0, smooth: true });
+  }, []);
+
+  const handlePostcardTouchMove = useCallback(
+    (e: TouchEvent<HTMLDivElement>) => {
+      if (reduceMotion || !postcardTiltShellRef.current) return;
+      const t = e.touches[0];
+      if (!t) return;
+      const rect = postcardTiltShellRef.current.getBoundingClientRect();
+      const px = ((t.clientX - rect.left) / rect.width - 0.5) * 2;
+      const py = ((t.clientY - rect.top) / rect.height - 0.5) * 2;
+      const max = 11;
+      setParallaxTilt({ rx: -py * max * 0.82, ry: px * max, smooth: false });
+    },
+    [reduceMotion]
+  );
+
+  const handlePostcardTouchEnd = useCallback(() => {
+    setParallaxTilt({ rx: 0, ry: 0, smooth: true });
+  }, []);
 
   const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longPressOriginRef = useRef<{ x: number; y: number } | null>(null);
@@ -1747,11 +1812,26 @@ export default function App() {
                   animate={{ opacity: 1, y: 0 }}
                   className="w-full max-w-3xl flex flex-col items-center gap-12 mt-6"
                 >
-                  {/* 3D Card */}
+                  {/* 3D Card + pointer parallax */}
                   <div
+                    ref={postcardTiltShellRef}
                     className="perspective-1000 w-full max-w-2xl relative group"
                     style={{ aspectRatio: displayImageAspect }}
+                    onMouseMove={handlePostcardPointerMove}
+                    onMouseLeave={handlePostcardPointerLeave}
+                    onTouchMove={handlePostcardTouchMove}
+                    onTouchEnd={handlePostcardTouchEnd}
                   >
+                <div
+                  className="h-full w-full"
+                  style={{
+                    transform: `rotateX(${parallaxTilt.rx}deg) rotateY(${parallaxTilt.ry}deg)`,
+                    transformStyle: 'preserve-3d',
+                    transition: parallaxTilt.smooth
+                      ? 'transform 0.5s cubic-bezier(0.22, 1, 0.36, 1)'
+                      : 'transform 0.06s ease-out',
+                  }}
+                >
                 {/* Flip Hint */}
                 <AnimatePresence>
                   {!isFlipped && (
@@ -1781,7 +1861,36 @@ export default function App() {
                   {/* Front */}
                   <div className="absolute inset-0 backface-hidden rounded-none shadow-2xl overflow-hidden bg-white p-4 md:p-6 border border-slate-100">
                     <div className="w-full h-full rounded-none overflow-hidden relative border-[8px] border-white shadow-inner">
-                      <img src={generatedImage} alt="Watercolor Postcard" className="w-full h-full object-cover" />
+                      <motion.div
+                        key={`reveal-${postcardRevealKey}`}
+                        className="relative z-0 h-full w-full"
+                        initial={
+                          reduceMotion
+                            ? { opacity: 0 }
+                            : {
+                                clipPath: 'circle(0% at 50% 50%)',
+                                filter: 'blur(14px)',
+                                opacity: 0.88,
+                              }
+                        }
+                        animate={
+                          reduceMotion
+                            ? { opacity: 1 }
+                            : {
+                                clipPath: 'circle(150% at 50% 50%)',
+                                filter: 'blur(0px)',
+                                opacity: 1,
+                              }
+                        }
+                        transition={{ duration: reduceMotion ? 0.3 : 1.35, ease: [0.22, 1, 0.36, 1] }}
+                      >
+                        <img
+                          src={generatedImage}
+                          alt="Watercolor Postcard"
+                          className={`h-full w-full object-cover ${!reduceMotion ? 'postcard-breathe-img' : ''}`}
+                        />
+                      </motion.div>
+                      <PostcardAmbientParticles holidayId={selectedHoliday.id} reducedMotion={reduceMotion} />
                     </div>
                   </div>
 
@@ -1903,6 +2012,7 @@ export default function App() {
                     </button>
                   </div>
                 </motion.div>
+                </div>
               </div>
 
               {/* Actions */}
