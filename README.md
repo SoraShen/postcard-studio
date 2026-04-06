@@ -134,7 +134,7 @@ Do **not** open port `8787` to the public internet if the reverse proxy runs on 
 
 ## Image generation speed
 
-The app tries **fast models first** (`gemini-2.5-flash-image`, then `gemini-3.1-flash-image-preview`) in two phases: **with** `responseModalities: IMAGE` for all models, then **without** — so a mid-list model can succeed without waiting on every fallback for an earlier model. List is in [`src/lib/geminiImageModels.ts`](src/lib/geminiImageModels.ts).
+The app tries models in order (`gemini-3.1-flash-lite-preview`, then `gemini-3-flash-preview` on failure) in two phases: **with** `responseModalities: IMAGE` for all models, then **without** — so a mid-list model can succeed without waiting on every fallback for an earlier model. List is in [`src/lib/geminiImageModels.ts`](src/lib/geminiImageModels.ts).
 
 Further gains: smaller source images before upload, stable network, and billing/quota on the Google project.
 

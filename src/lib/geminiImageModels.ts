@@ -1,8 +1,7 @@
 /**
- * Image models for postcard generation — fastest first.
- * Pro preview is omitted by default (slower); add here if you need max quality.
+ * Postcard image generation: primary then fallback on failure.
  */
 export const POSTCARD_IMAGE_MODELS = [
-  'gemini-2.5-flash-image',
-  'gemini-3.1-flash-image-preview',
+  'gemini-3.1-flash-lite-preview',
+  'gemini-3-flash-preview',
 ] as const;
