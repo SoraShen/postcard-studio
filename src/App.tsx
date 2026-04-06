@@ -574,26 +574,66 @@ const TRANSLATIONS: Record<string, any> = {
   }
 };
 
-/** Mobile Safari often blocks data: URLs on synthetic clicks; blob URLs work better. */
-function triggerPngDownload(canvas: HTMLCanvasElement, filename: string): Promise<void> {
+function anchorDownloadPng(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.rel = 'noopener';
+  a.style.display = 'none';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+/** Prefer system share (Save to Photos / 存储到相册) on phones; fallback to download link. */
+function shareOrDownloadPngFromCanvas(
+  canvas: HTMLCanvasElement,
+  filename: string,
+  shareHint: { title: string; text: string }
+): Promise<void> {
   return new Promise((resolve, reject) => {
     canvas.toBlob(
-      (blob) => {
+      async (blob) => {
         if (!blob) {
           reject(new Error('toBlob failed'));
           return;
         }
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        a.rel = 'noopener';
-        a.style.display = 'none';
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-        URL.revokeObjectURL(url);
-        resolve();
+
+        const touchPrimary =
+          typeof window !== 'undefined' &&
+          (window.matchMedia('(hover: none)').matches ||
+            window.matchMedia('(pointer: coarse)').matches);
+
+        if (touchPrimary && typeof navigator.share === 'function') {
+          try {
+            const file = new File([blob], filename, { type: 'image/png' });
+            if (navigator.canShare?.({ files: [file] })) {
+              await navigator.share({
+                files: [file],
+                title: shareHint.title,
+                text: shareHint.text,
+              });
+              resolve();
+              return;
+            }
+          } catch (e: unknown) {
+            const name = e instanceof Error ? e.name : '';
+            if (name === 'AbortError') {
+              resolve();
+              return;
+            }
+            // fall through to anchor download
+          }
+        }
+
+        try {
+          anchorDownloadPng(blob, filename);
+          resolve();
+        } catch (err) {
+          reject(err);
+        }
       },
       'image/png',
       1.0
@@ -1065,7 +1105,19 @@ export default function App() {
         ctx.fillRect(0, frontImg.height + borderSize * 2, canvas.width, frontImg.height + borderSize * 2);
         ctx.drawImage(backCanvas, borderSize, frontImg.height + borderSize * 2 + borderSize);
 
-        await triggerPngDownload(canvas, `postcard-stitched-${selectedHoliday.id}.png`);
+        await shareOrDownloadPngFromCanvas(
+          canvas,
+          `postcard-stitched-${selectedHoliday.id}.png`,
+          language === 'zh'
+            ? {
+                title: '明信片 · 拼接图',
+                text: '在分享面板中选「存储图像」或「存储到照片」可保存到相册',
+              }
+            : {
+                title: 'Postcard (stitched)',
+                text: 'Choose Save Image or Save to Photos in the share sheet to add to your gallery',
+              }
+        );
       } else {
         // Phantom Tank Mode (Color Front Optimized)
         canvas.width = frontImg.width;
@@ -1110,7 +1162,19 @@ export default function App() {
         
         ctx.putImageData(outputData, 0, 0);
 
-        await triggerPngDownload(canvas, `postcard-hidden-${selectedHoliday.id}.png`);
+        await shareOrDownloadPngFromCanvas(
+          canvas,
+          `postcard-hidden-${selectedHoliday.id}.png`,
+          language === 'zh'
+            ? {
+                title: '明信片 · 隐藏图',
+                text: '在分享面板中选「存储图像」或「存储到照片」可保存到相册',
+              }
+            : {
+                title: 'Postcard (hidden)',
+                text: 'Choose Save Image or Save to Photos in the share sheet to add to your gallery',
+              }
+        );
       }
     } catch (err) {
       console.error("Download error:", err);
