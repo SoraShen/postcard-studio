@@ -2,7 +2,11 @@ import 'dotenv/config';
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'node:url';
-import { runGeminiPostcardGeneration, formatGenaiError } from '../src/lib/geminiPostcardGeneration.ts';
+import {
+  runGeminiPostcardGeneration,
+  formatGenaiError,
+  type PostcardImageSize,
+} from '../src/lib/geminiPostcardGeneration.ts';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(__dirname, '..');
@@ -47,11 +51,15 @@ app.post('/api/generate-postcard', async (req, res) => {
     prompt?: string;
     mimeType?: string;
     imageBase64?: string;
+    imageSize?: string;
   };
 
   const prompt = typeof body.prompt === 'string' ? body.prompt : '';
   const mimeType = typeof body.mimeType === 'string' ? body.mimeType : '';
   const imageBase64 = typeof body.imageBase64 === 'string' ? body.imageBase64 : '';
+  const rawSize = typeof body.imageSize === 'string' ? body.imageSize : '';
+  const imageSize: PostcardImageSize | undefined =
+    rawSize === '512' || rawSize === '1K' || rawSize === '2K' || rawSize === '4K' ? rawSize : undefined;
 
   if (!prompt || !mimeType || !imageBase64) {
     res.status(400).json({ error: 'Missing prompt, mimeType, or imageBase64.' });
@@ -63,6 +71,7 @@ app.post('/api/generate-postcard', async (req, res) => {
       imageBase64,
       mimeType,
       prompt,
+      ...(imageSize ? { imageSize } : {}),
     });
     res.json({ dataUrl });
   } catch (e) {

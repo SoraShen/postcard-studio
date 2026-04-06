@@ -1,5 +1,9 @@
-import { formatGenaiError, pickInlineImageFromResponse } from './geminiPostcardGeneration';
-import { POSTCARD_IMAGE_MODELS } from './geminiImageModels';
+import {
+  formatGenaiError,
+  modelsForPostcardImageSize,
+  pickInlineImageFromResponse,
+  type PostcardImageSize,
+} from './geminiPostcardGeneration';
 
 type GenContentResponse = Parameters<typeof pickInlineImageFromResponse>[0];
 
@@ -9,7 +13,7 @@ type GenContentResponse = Parameters<typeof pickInlineImageFromResponse>[0];
  */
 export async function runGeminiPostcardViaWorkerRest(
   workerBase: string,
-  input: { imageBase64: string; mimeType: string; prompt: string }
+  input: { imageBase64: string; mimeType: string; prompt: string; imageSize?: PostcardImageSize }
 ): Promise<string> {
   const base = workerBase.replace(/\/$/, '');
   let lastErr: unknown;
@@ -33,7 +37,7 @@ export async function runGeminiPostcardViaWorkerRest(
           ],
           generationConfig: {
             ...(requestImageModality ? { responseModalities: ['IMAGE'] } : {}),
-            imageConfig: { imageSize: '1K' },
+            imageConfig: { imageSize: input.imageSize ?? '1K' },
           },
         }),
       });
@@ -70,8 +74,9 @@ export async function runGeminiPostcardViaWorkerRest(
     return false;
   };
 
+  const models = modelsForPostcardImageSize(input.imageSize);
   outer: for (const withImage of [true, false] as const) {
-    for (const model of POSTCARD_IMAGE_MODELS) {
+    for (const model of models) {
       if (await tryModel(model, withImage)) break outer;
     }
   }

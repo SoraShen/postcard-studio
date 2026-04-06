@@ -662,7 +662,7 @@ function shareOrDownloadPngFromCanvas(
 // --- Components ---
 
 export default function App() {
-  const [language, setLanguage] = useState<'en' | 'zh'>('zh');
+  const [language, setLanguage] = useState<'en' | 'zh'>('en');
   const [selectedHoliday, setSelectedHoliday] = useState<Holiday>(HOLIDAYS[5]); // Default to Easter
   const [selectedStyle, setSelectedStyle] = useState<Style>(STYLES[0]); // Default to Watercolor
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
@@ -949,23 +949,35 @@ export default function App() {
 
       const hasChinese = (str: string) => /[\u4e00-\u9fa5]/.test(str);
       const useChineseCalligraphy = hasChinese(holidayName) || hasChinese(blessingToUse) || language === 'zh';
+      const postcardImageSize = useChineseCalligraphy ? ('1K' as const) : ('512' as const);
 
       const getVerticalPos = (y: number) => (y < 33 ? 'top' : y < 66 ? 'middle' : 'bottom');
       const getHorizontalPos = (x: number) => (x < 33 ? 'left' : x < 66 ? 'center' : 'right');
       const positionDesc = `${getVerticalPos(textPositionPct.y)}-${getHorizontalPos(textPositionPct.x)}`;
 
+      const chineseTypographyBlock = useChineseCalligraphy
+        ? `
+      CHINESE TEXT — LEGIBILITY FIRST (中文文字优先保证清晰可辨，艺术效果不得破坏字形):
+      - Render Standard Chinese characters (规范汉字): every stroke complete, radicals intact; do NOT swap homophones, omit, merge, or deform characters. The visible strings must match EXACTLY: title = "${holidayName}"; blessing line = "${blessingToUse}" (character-for-character).
+      - Use a balanced 楷书/行楷-inspired hand style: elegant but readable. Avoid extreme cursive where strokes become illegible blobs.
+      - Keep ink for Han characters SHARPER than the scenery: limit watercolor/ink bleed INSIDE glyph outlines; soft wash is OK on the background, not smearing through strokes.
+      - Place the title on its own line and the blessing on the next line with generous line-height; no overlapping or vertically squashed characters; baseline stays horizontal (no vertical text unless the style is explicitly vertical scroll — default is horizontal two lines).
+      - Ensure strong contrast between text ink and the area behind it (slight paper strip, soft vignette, or light halo behind text is allowed if it matches ${selectedStyle.name}).
+      - Do not rotate, stretch, or perspective-warp Chinese glyphs.`
+        : '';
+
       const prompt = `Transform this photo into a beautiful, ${selectedStyle.promptSuffix} for ${holidayName}. 
       Incorporate ${sceneElements} into the scene. 
       
-      CRITICAL TEXT INSTRUCTIONS:
-      1. Render the word "${holidayName}" in a large, elegant font that matches the ${selectedStyle.name} style. 
-      ${useChineseCalligraphy ? '2. IMPORTANT: Since the text is in Chinese, use elegant Chinese "Xing-shu" (Running Script) calligraphy style for the characters.' : '2. Use a beautiful vintage script font for the text.'}
-      3. This word must be placed at the ${positionDesc} of the image.
-      4. MANDATORY: Directly below "${holidayName}", add a clear and legible line of text that says: "${blessingToUse}". 
-      5. The size of the text should be approximately ${textSize}pt in scale relative to the image.
-      6. The text must be rendered in a style that blends naturally into the background, matching the ${selectedStyle.name} aesthetic (e.g., if watercolor, it should bleed; if sketch, it should look like ink; if Ghibli, it should look like hand-painted cel art).
+      CRITICAL TEXT INSTRUCTIONS:${chineseTypographyBlock}
+      1. Render the title "${holidayName}" in a large, elegant type treatment that matches the ${selectedStyle.name} style. 
+      ${useChineseCalligraphy ? '2. Chinese title: follow the CHINESE TEXT rules above; prefer clear 行楷 over illegible 草书.' : '2. Use a beautiful vintage script font for Latin text.'}
+      3. Place this title at the ${positionDesc} of the image.
+      4. MANDATORY: On a separate line directly below the title, render the full blessing exactly: "${blessingToUse}". It must be clearly readable at postcard viewing distance.
+      5. Target text scale ~${textSize}pt relative to the image; for Chinese, err slightly larger rather than smaller for clarity.
+      6. Background and illustration may use soft painterly effects; text ink must stay crisper than the painted scene.
       7. The entire composition (image and text) must feel like a single, cohesive piece of art.
-      8. Ensure both "${holidayName}" and "${blessingToUse}" are clearly visible and not cut off.`;
+      8. Ensure both "${holidayName}" and "${blessingToUse}" are fully visible, not cropped, not truncated.`;
 
       let resultDataUrl: string;
 
@@ -975,6 +987,7 @@ export default function App() {
             imageBase64: parsed.base64,
             mimeType: parsed.mimeType,
             prompt,
+            imageSize: postcardImageSize,
           });
         } else {
           const url = `${backendBase || ''}/api/generate-postcard`;
@@ -985,6 +998,7 @@ export default function App() {
               prompt,
               mimeType: parsed.mimeType,
               imageBase64: parsed.base64,
+              imageSize: postcardImageSize,
             }),
           });
           const data = (await res.json().catch(() => ({}))) as { dataUrl?: string; error?: string };
@@ -1019,6 +1033,7 @@ export default function App() {
           imageBase64: parsed.base64,
           mimeType: parsed.mimeType,
           prompt,
+          imageSize: postcardImageSize,
         });
       }
 

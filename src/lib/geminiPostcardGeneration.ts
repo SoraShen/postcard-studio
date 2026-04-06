@@ -1,6 +1,19 @@
 import { GoogleGenAI, Modality } from '@google/genai';
 import { POSTCARD_IMAGE_MODELS } from './geminiImageModels';
 
+/**
+ * Gemini image output size. `"512"` is only valid for `gemini-3.1-flash-image-preview`
+ * (see Google docs); we restrict the model chain accordingly.
+ */
+export type PostcardImageSize = '512' | '1K' | '2K' | '4K';
+
+const MODELS_FOR_512 = ['gemini-3.1-flash-image-preview'] as const;
+
+export function modelsForPostcardImageSize(size: PostcardImageSize | undefined): readonly string[] {
+  if (size === '512') return MODELS_FOR_512;
+  return POSTCARD_IMAGE_MODELS;
+}
+
 export function formatGenaiError(e: unknown): string {
   if (e instanceof Error) return e.message;
   if (typeof e === 'object' && e !== null && 'message' in e) {
@@ -39,7 +52,7 @@ export function pickInlineImageFromResponse(response: {
  */
 export async function runGeminiPostcardGeneration(
   apiKey: string,
-  input: { imageBase64: string; mimeType: string; prompt: string }
+  input: { imageBase64: string; mimeType: string; prompt: string; imageSize?: PostcardImageSize }
 ): Promise<string> {
   const ai = new GoogleGenAI({ apiKey });
   let lastErr: unknown;
@@ -58,7 +71,7 @@ export async function runGeminiPostcardGeneration(
         },
         config: {
           ...(requestImageModality ? { responseModalities: [Modality.IMAGE] } : {}),
-          imageConfig: { imageSize: '1K' },
+          imageConfig: { imageSize: input.imageSize ?? '1K' },
         },
       });
 
@@ -92,8 +105,9 @@ export async function runGeminiPostcardGeneration(
     return false;
   };
 
+  const models = modelsForPostcardImageSize(input.imageSize);
   outer: for (const withImage of [true, false] as const) {
-    for (const model of POSTCARD_IMAGE_MODELS) {
+    for (const model of models) {
       if (await tryModel(model, withImage)) break outer;
     }
   }
