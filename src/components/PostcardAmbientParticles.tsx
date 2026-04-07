@@ -316,7 +316,11 @@ export function PostcardAmbientParticles({
   if (reducedMotion) return null;
 
   return (
-    <div ref={wrapRef} className={`pointer-events-none absolute inset-0 z-[5] overflow-hidden ${className}`} aria-hidden>
+    <div
+      ref={wrapRef}
+      className={`pointer-events-none absolute inset-0 z-[5] overflow-hidden [transform:translateZ(3px)] ${className}`}
+      aria-hidden
+    >
       <canvas ref={canvasRef} className="absolute inset-0 block h-full w-full" />
     </div>
   );

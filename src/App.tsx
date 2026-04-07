@@ -2064,9 +2064,13 @@ export default function App() {
                   className="relative w-full h-full preserve-3d cursor-pointer"
                   onClick={() => setIsFlipped(!isFlipped)}
                 >
-                  {/* Front */}
-                  <div className="absolute inset-0 backface-hidden rounded-none shadow-2xl overflow-hidden bg-white p-2 sm:p-3 md:p-6 border border-slate-100">
-                    <div className="w-full h-full rounded-none overflow-hidden relative border-[4px] sm:border-[6px] md:border-[8px] border-white shadow-inner">
+                  {/* Front — 翻面后仍需禁用点击：translateZ 正面层否则会盖住背面并抢走输入焦点 */}
+                  <div
+                    className={`absolute inset-0 backface-hidden rounded-none shadow-2xl overflow-hidden bg-white p-2 sm:p-3 md:p-6 border border-slate-100 ${
+                      isFlipped ? 'pointer-events-none' : ''
+                    }`}
+                  >
+                    <div className="postcard-front-stack relative h-full w-full rounded-none overflow-hidden border-[4px] sm:border-[6px] md:border-[8px] border-white shadow-inner">
                       <motion.div
                         key={`reveal-${postcardRevealKey}`}
                         className="relative z-0 h-full w-full"
@@ -2075,8 +2079,7 @@ export default function App() {
                             ? { opacity: 0 }
                             : {
                                 clipPath: 'circle(0% at 50% 50%)',
-                                filter: 'blur(14px)',
-                                opacity: 0.88,
+                                opacity: 0.82,
                               }
                         }
                         animate={
@@ -2084,7 +2087,6 @@ export default function App() {
                             ? { opacity: 1 }
                             : {
                                 clipPath: 'circle(150% at 50% 50%)',
-                                filter: 'blur(0px)',
                                 opacity: 1,
                               }
                         }
@@ -2098,14 +2100,14 @@ export default function App() {
                       </motion.div>
                       {frontTextOverlay && (
                         <div
-                          className="pointer-events-none absolute inset-0 z-[25] flex items-center justify-center"
+                          className="pointer-events-none absolute inset-0 z-[25] flex items-center justify-center [transform:translateZ(2px)]"
                           aria-hidden
                         >
                           <div
                             style={{
                               left: `${textPositionPct.x}%`,
                               top: `${textPositionPct.y}%`,
-                              transform: 'translate(-50%, -50%)',
+                              transform: 'translate3d(-50%, -50%, 0)',
                             }}
                             className="absolute max-w-[min(92%,20rem)] text-center px-2"
                           >
@@ -2384,149 +2386,6 @@ export default function App() {
                   </motion.div>
                 )}
 
-                {showRechargeModal && (
-                  <motion.div 
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
-                  >
-                    <motion.div 
-                      initial={{ scale: 0.9, y: 20 }}
-                      animate={{ scale: 1, y: 0 }}
-                      exit={{ scale: 0.9, y: 20 }}
-                      className="bg-white rounded-2xl sm:rounded-3xl p-6 sm:p-8 w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto"
-                    >
-                      <div className="flex items-start gap-3 mb-5 sm:mb-6">
-                        <div className="p-2.5 sm:p-3 rounded-2xl bg-amber-50 text-amber-600 shrink-0">
-                          <Sparkles size={24} />
-                        </div>
-                        <div className="min-w-0">
-                          <h3 className="text-lg sm:text-xl font-semibold">{t.rechargeTitle}</h3>
-                          <p className="text-slate-500 text-sm sm:text-base leading-relaxed mt-1">{t.rechargeDesc}</p>
-                        </div>
-                      </div>
-
-                      <div className="mb-6">
-                        <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 block ml-1">{t.paymentMethod}</label>
-                        <div className="grid grid-cols-2 gap-3">
-                          <button 
-                            onClick={() => setPaymentMethod('link')}
-                            className={`flex items-center justify-center gap-2 py-3 rounded-2xl border transition-all ${
-                              paymentMethod === 'link' 
-                                ? 'bg-slate-900 text-white border-slate-900 shadow-md' 
-                                : 'bg-slate-50 text-slate-500 border-slate-100 hover:border-slate-200'
-                            }`}
-                          >
-                            <div className={`w-2 h-2 rounded-full ${paymentMethod === 'link' ? 'bg-blue-400' : 'bg-slate-300'}`} />
-                            <span className="font-semibold">{t.link}</span>
-                          </button>
-                          <button 
-                            onClick={() => setPaymentMethod('alipay')}
-                            className={`flex items-center justify-center gap-2 py-3 rounded-2xl border transition-all ${
-                              paymentMethod === 'alipay' 
-                                ? 'bg-slate-900 text-white border-slate-900 shadow-md' 
-                                : 'bg-slate-50 text-slate-500 border-slate-100 hover:border-slate-200'
-                            }`}
-                          >
-                            <div className={`w-2 h-2 rounded-full ${paymentMethod === 'alipay' ? 'bg-blue-500' : 'bg-slate-300'}`} />
-                            <span className="font-semibold">{t.alipay}</span>
-                          </button>
-                        </div>
-                      </div>
-
-                      <div className="space-y-3 mb-8">
-                        {[
-                          { price: 1, credits: 5, label: "Starter" },
-                          { price: 3, credits: 18, label: t.popular, bonus: language === 'zh' ? "节省 16%" : "Save 16%" },
-                          { price: 5, credits: 40, label: t.bestValue, bonus: language === 'zh' ? "节省 37%" : "Save 37%" }
-                        ].map((pack) => (
-                          <button
-                            key={pack.price}
-                            onClick={() => handleRecharge(pack.price, pack.credits)}
-                            className="w-full flex items-center justify-between p-4 rounded-2xl border border-slate-100 bg-slate-50 hover:bg-white hover:border-slate-300 hover:shadow-md transition-all group"
-                          >
-                            <div className="text-left">
-                              <p className="font-bold text-slate-800">{pack.credits} {t.credits}</p>
-                              <p className="text-xs text-slate-400">{pack.label}</p>
-                            </div>
-                            <div className="flex items-center gap-3">
-                              {pack.bonus && (
-                                <span className="text-[10px] font-bold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full uppercase">
-                                  {pack.bonus}
-                                </span>
-                              )}
-                              <span className="font-bold text-slate-900 group-hover:scale-110 transition-transform">${pack.price}</span>
-                            </div>
-                          </button>
-                        ))}
-                      </div>
-
-                      <button 
-                        onClick={() => setShowRechargeModal(false)}
-                        className="w-full py-3 rounded-xl border border-slate-200 text-slate-400 font-medium hover:text-slate-600 transition-all"
-                      >
-                        {t.cancel}
-                      </button>
-                    </motion.div>
-                  </motion.div>
-                )}
-
-                {showPasswordInput && (
-                  <motion.div 
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
-                  >
-                    <motion.div 
-                      initial={{ scale: 0.9, y: 20 }}
-                      animate={{ scale: 1, y: 0 }}
-                      exit={{ scale: 0.9, y: 20 }}
-                      className="bg-white rounded-2xl sm:rounded-3xl p-6 sm:p-8 w-full max-w-md shadow-2xl"
-                    >
-                      <div className="flex items-center gap-3 mb-5 sm:mb-6">
-                        <div className="p-2.5 sm:p-3 rounded-2xl bg-purple-50 text-purple-600 shrink-0">
-                          <Sparkles size={24} />
-                        </div>
-                        <h3 className="text-lg sm:text-xl font-semibold leading-snug">{t.unlockCredits}</h3>
-                      </div>
-
-                      {soraEggUsed ? (
-                        <p className="text-amber-800/90 text-sm leading-relaxed mb-6">{t.soraEggAlreadyUsed}</p>
-                      ) : (
-                        <div className="bg-slate-50 rounded-2xl px-4 py-3 border border-slate-200 mb-6">
-                          <input
-                            type="password"
-                            placeholder={t.enterPassword}
-                            value={password}
-                            onChange={(e) => setPassword(e.target.value)}
-                            className="w-full bg-transparent border-none focus:ring-0 text-base"
-                            autoFocus
-                          />
-                        </div>
-                      )}
-
-                      <div className="flex gap-3">
-                        <button
-                          onClick={() => setShowPasswordInput(false)}
-                          className={`py-3 rounded-xl border border-slate-200 text-slate-600 font-medium hover:bg-slate-50 transition-all ${soraEggUsed ? 'w-full' : 'flex-1'}`}
-                        >
-                          {t.cancel}
-                        </button>
-                        {!soraEggUsed && (
-                          <button
-                            onClick={handleUnlockMagic}
-                            className="flex-1 py-3 rounded-xl bg-slate-900 text-white font-semibold shadow-lg hover:bg-slate-800 transition-all"
-                          >
-                            {t.send}
-                          </button>
-                        )}
-                      </div>
-                    </motion.div>
-                  </motion.div>
-                )}
-
                 {/* Envelope animation overlay removed as it's now part of the result flow */}
               </AnimatePresence>
 
@@ -2538,6 +2397,167 @@ export default function App() {
           )}
         </AnimatePresence>
       </main>
+
+      <AnimatePresence>
+        {showRechargeModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="bg-white rounded-2xl sm:rounded-3xl p-6 sm:p-8 w-full max-w-md shadow-2xl max-h-[90vh] overflow-y-auto"
+            >
+              <div className="flex items-start gap-3 mb-5 sm:mb-6">
+                <div className="p-2.5 sm:p-3 rounded-2xl bg-amber-50 text-amber-600 shrink-0">
+                  <Sparkles size={24} />
+                </div>
+                <div className="min-w-0">
+                  <h3 className="text-lg sm:text-xl font-semibold">{t.rechargeTitle}</h3>
+                  <p className="text-slate-500 text-sm sm:text-base leading-relaxed mt-1">{t.rechargeDesc}</p>
+                </div>
+              </div>
+
+              <div className="mb-6">
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 block ml-1">
+                  {t.paymentMethod}
+                </label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => setPaymentMethod('link')}
+                    className={`flex items-center justify-center gap-2 py-3 rounded-2xl border transition-all ${
+                      paymentMethod === 'link'
+                        ? 'bg-slate-900 text-white border-slate-900 shadow-md'
+                        : 'bg-slate-50 text-slate-500 border-slate-100 hover:border-slate-200'
+                    }`}
+                  >
+                    <div
+                      className={`w-2 h-2 rounded-full ${paymentMethod === 'link' ? 'bg-blue-400' : 'bg-slate-300'}`}
+                    />
+                    <span className="font-semibold">{t.link}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPaymentMethod('alipay')}
+                    className={`flex items-center justify-center gap-2 py-3 rounded-2xl border transition-all ${
+                      paymentMethod === 'alipay'
+                        ? 'bg-slate-900 text-white border-slate-900 shadow-md'
+                        : 'bg-slate-50 text-slate-500 border-slate-100 hover:border-slate-200'
+                    }`}
+                  >
+                    <div
+                      className={`w-2 h-2 rounded-full ${paymentMethod === 'alipay' ? 'bg-blue-500' : 'bg-slate-300'}`}
+                    />
+                    <span className="font-semibold">{t.alipay}</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-3 mb-8">
+                {[
+                  { price: 1, credits: 5, label: 'Starter' },
+                  { price: 3, credits: 18, label: t.popular, bonus: language === 'zh' ? '节省 16%' : 'Save 16%' },
+                  { price: 5, credits: 40, label: t.bestValue, bonus: language === 'zh' ? '节省 37%' : 'Save 37%' },
+                ].map((pack) => (
+                  <button
+                    key={pack.price}
+                    type="button"
+                    onClick={() => handleRecharge(pack.price, pack.credits)}
+                    className="w-full flex items-center justify-between p-4 rounded-2xl border border-slate-100 bg-slate-50 hover:bg-white hover:border-slate-300 hover:shadow-md transition-all group"
+                  >
+                    <div className="text-left">
+                      <p className="font-bold text-slate-800">
+                        {pack.credits} {t.credits}
+                      </p>
+                      <p className="text-xs text-slate-400">{pack.label}</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      {pack.bonus && (
+                        <span className="text-[10px] font-bold bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full uppercase">
+                          {pack.bonus}
+                        </span>
+                      )}
+                      <span className="font-bold text-slate-900 group-hover:scale-110 transition-transform">
+                        ${pack.price}
+                      </span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowRechargeModal(false)}
+                className="w-full py-3 rounded-xl border border-slate-200 text-slate-400 font-medium hover:text-slate-600 transition-all"
+              >
+                {t.cancel}
+              </button>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {showPasswordInput && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ scale: 0.9, y: 20 }}
+              animate={{ scale: 1, y: 0 }}
+              exit={{ scale: 0.9, y: 20 }}
+              className="bg-white rounded-2xl sm:rounded-3xl p-6 sm:p-8 w-full max-w-md shadow-2xl"
+            >
+              <div className="flex items-center gap-3 mb-5 sm:mb-6">
+                <div className="p-2.5 sm:p-3 rounded-2xl bg-purple-50 text-purple-600 shrink-0">
+                  <Sparkles size={24} />
+                </div>
+                <h3 className="text-lg sm:text-xl font-semibold leading-snug">{t.unlockCredits}</h3>
+              </div>
+
+              {soraEggUsed ? (
+                <p className="text-amber-800/90 text-sm leading-relaxed mb-6">{t.soraEggAlreadyUsed}</p>
+              ) : (
+                <div className="bg-slate-50 rounded-2xl px-4 py-3 border border-slate-200 mb-6">
+                  <input
+                    type="password"
+                    placeholder={t.enterPassword}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="w-full bg-transparent border-none focus:ring-0 text-base"
+                    autoFocus
+                  />
+                </div>
+              )}
+
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowPasswordInput(false)}
+                  className={`py-3 rounded-xl border border-slate-200 text-slate-600 font-medium hover:bg-slate-50 transition-all ${soraEggUsed ? 'w-full' : 'flex-1'}`}
+                >
+                  {t.cancel}
+                </button>
+                {!soraEggUsed && (
+                  <button
+                    type="button"
+                    onClick={handleUnlockMagic}
+                    className="flex-1 py-3 rounded-xl bg-slate-900 text-white font-semibold shadow-lg hover:bg-slate-800 transition-all"
+                  >
+                    {t.send}
+                  </button>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Footer */}
       <footer className="mt-10 sm:mt-16 py-6 sm:py-8 border-t border-slate-100 w-full flex flex-col md:flex-row justify-between items-center gap-3 sm:gap-4 text-slate-400 text-xs sm:text-sm px-1">

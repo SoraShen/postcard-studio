@@ -5,6 +5,7 @@
   --font-handwritten: "Dancing Script", cursive;
   --font-elegant: "Great Vibes", cursive;
   --font-chinese-handwritten: "Zhi Mang Xing", cursive;
+  --font-chinese-xingshu: "Long Cang", "Zhi Mang Xing", cursive;
 
   --color-lunar-red: #d32f2f;
   --color-lunar-gold: #ffd700;
@@ -20,6 +21,11 @@
   body {
     @apply font-sans antialiased text-slate-900 bg-[#fafafa] transition-colors duration-700;
   }
+}
+
+/* 明信片正面中文叠字（行书）— 与 canvas 下载合成一致 */
+.font-chinese-xingshu {
+  font-family: var(--font-chinese-xingshu);
 }
 
 .perspective-1000 {
@@ -38,28 +44,37 @@
   transform-style: preserve-3d;
 }
 
+/* 不用 filter：与父级 rotateY + preserve-3d 叠在一起时，GPU 合成易导致正面「左右两半」错位 */
 @keyframes postcard-breathe {
   0%,
   100% {
-    filter: brightness(1) saturate(1);
     transform: scale(1);
+    opacity: 1;
   }
   50% {
-    filter: brightness(1.05) saturate(1.03);
-    transform: scale(1.007);
+    transform: scale(1.006);
+    opacity: 0.98;
   }
 }
 
 .postcard-breathe-img {
   animation: postcard-breathe 5.75s ease-in-out infinite;
   transform-origin: center center;
-  will-change: filter, transform;
+  will-change: transform;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .postcard-breathe-img {
     animation: none;
-    filter: none;
     transform: none;
+    opacity: 1;
   }
+}
+
+/* 正面内容与 3D 翻转同层，减少子层 filter/clip 撕裂 */
+.postcard-front-stack {
+  transform: translate3d(0, 0, 1px);
+  backface-visibility: hidden;
+  -webkit-backface-visibility: hidden;
+  isolation: isolate;
 }
