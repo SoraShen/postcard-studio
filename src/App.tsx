@@ -830,7 +830,7 @@ export default function App() {
   const [crop, setCrop] = useState<Point>({ x: 0, y: 0 });
   const [zoom, setZoom] = useState(1);
   const [aspectRatio, setAspectRatio] = useState<number | undefined>(undefined);
-  /** Natural w/h of current photo (upload or generated) for Free crop + preview frames */
+  /** Natural w/h of current photo — outer crop/preview frame; Cropper `aspect` controls the inner crop box only */
   const [displayImageAspect, setDisplayImageAspect] = useState(4 / 3);
   const [croppedAreaPixels, setCroppedAreaPixels] = useState<Area | null>(null);
 
@@ -924,8 +924,6 @@ export default function App() {
     img.onerror = () => setDisplayImageAspect(4 / 3);
     img.src = aspectImageSrc;
   }, [aspectImageSrc]);
-
-  const cropFrameAspect = aspectRatio !== undefined ? aspectRatio : displayImageAspect;
 
   const handleImageUpload = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1770,7 +1768,7 @@ export default function App() {
             >
               <div
                 className="relative w-full rounded-2xl sm:rounded-3xl overflow-hidden shadow-2xl border-4 sm:border-8 border-white bg-slate-900"
-                style={{ aspectRatio: cropFrameAspect }}
+                style={{ aspectRatio: displayImageAspect }}
               >
                 <Cropper
                   image={uploadedImage}
@@ -1852,7 +1850,7 @@ export default function App() {
               className="w-full max-w-2xl flex flex-col items-center gap-5 sm:gap-8"
             >
               <div
-                style={{ aspectRatio: cropFrameAspect }}
+                style={{ aspectRatio: displayImageAspect }}
                 className="relative w-full rounded-2xl sm:rounded-3xl overflow-hidden shadow-2xl border-4 sm:border-8 border-white"
               >
                 <img src={uploadedImage} alt="Preview" className="w-full h-full object-cover select-none" />
