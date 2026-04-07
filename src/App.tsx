@@ -104,6 +104,98 @@ function parseDataUrlImage(dataUrl: string): { base64: string; mimeType: string 
   };
 }
 
+function hasChineseChars(str: string): boolean {
+  return /[\u4e00-\u9fff]/.test(str);
+}
+
+async function ensureXingshuFontsLoaded(): Promise<void> {
+  try {
+    await document.fonts.load("400 64px 'Long Cang'");
+    await document.fonts.load("400 64px 'Zhi Mang Xing'");
+  } catch {
+    /* ignore */
+  }
+}
+
+function wrapCjkLinesCanvas(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  maxW: number,
+  fontSpec: string
+): string[] {
+  ctx.font = fontSpec;
+  const lines: string[] = [];
+  let line = '';
+  for (const ch of text) {
+    const test = line + ch;
+    if (ctx.measureText(test).width > maxW && line) {
+      lines.push(line);
+      line = ch;
+    } else {
+      line = test;
+    }
+  }
+  if (line) lines.push(line);
+  return lines.length ? lines : [''];
+}
+
+/** 行书叠字 — 与明信片正面 DOM 叠加一致，供下载合成 */
+function drawPostcardFrontTextOverlay(
+  ctx: CanvasRenderingContext2D,
+  offsetX: number,
+  offsetY: number,
+  w: number,
+  h: number,
+  title: string,
+  blessing: string,
+  textSizeUi: number,
+  positionPct: { x: number; y: number }
+) {
+  const cx = offsetX + (w * positionPct.x) / 100;
+  const cy = offsetY + (h * positionPct.y) / 100;
+  const titlePx = Math.max(22, Math.round((textSizeUi / 48) * h * 0.1));
+  const subPx = Math.max(15, Math.round(titlePx * 0.5));
+  const fontTitle = `${titlePx}px "Long Cang", "Zhi Mang Xing", cursive`;
+  const fontBless = `${subPx}px "Long Cang", "Zhi Mang Xing", cursive`;
+  const maxTextW = w * 0.86;
+
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+
+  const titleLines = title.trim() ? wrapCjkLinesCanvas(ctx, title.trim(), maxTextW, fontTitle) : [];
+  const blessLines = blessing.trim()
+    ? wrapCjkLinesCanvas(ctx, blessing.trim(), maxTextW, fontBless)
+    : [];
+
+  const lineGapT = titlePx * 1.2;
+  const lineGapB = subPx * 1.28;
+  const gapMid = titleLines.length ? titlePx * 0.4 : 0;
+  const totalH = titleLines.length * lineGapT + gapMid + blessLines.length * lineGapB;
+  let y = cy - totalH / 2 + lineGapT / 2;
+
+  ctx.font = fontTitle;
+  for (const ln of titleLines) {
+    ctx.strokeStyle = 'rgba(0,0,0,0.42)';
+    ctx.lineWidth = Math.max(2, titlePx * 0.085);
+    ctx.lineJoin = 'round';
+    ctx.strokeText(ln, cx, y);
+    ctx.fillStyle = 'rgba(255,255,255,0.96)';
+    ctx.fillText(ln, cx, y);
+    y += lineGapT;
+  }
+  y += gapMid;
+
+  ctx.font = fontBless;
+  for (const ln of blessLines) {
+    ctx.strokeStyle = 'rgba(0,0,0,0.38)';
+    ctx.lineWidth = Math.max(1.5, subPx * 0.075);
+    ctx.strokeText(ln, cx, y);
+    ctx.fillStyle = 'rgba(255,252,250,0.94)';
+    ctx.fillText(ln, cx, y);
+    y += lineGapB;
+  }
+}
+
 type PostcardBackLabels = {
   postcardMark: string;
   postcardHint: string;
@@ -517,6 +609,7 @@ const TRANSLATIONS: Record<string, any> = {
     unlockCredits: "Unlock Credits",
     enterPassword: "Enter Password",
     magicUnlocked: "Magical Credits Unlocked!",
+    soraEggAlreadyUsed: "Sora easter egg credits were already claimed in this browser.",
     downloadStitched: "Download Stitched (PNG)",
     downloadHidden: "Download Hidden (Phantom Tank)",
     downloadMode: "Download Mode",
@@ -541,8 +634,8 @@ const TRANSLATIONS: Record<string, any> = {
     postcardMark: "明信片",
     postcardHint: "写下心意，传递温暖",
     blessingLabel: "祝福语",
-    toLabel: "收件人",
-    fromLabel: "寄信人",
+    toLabel: "To · 收件人",
+    fromLabel: "From · 寄信人",
     toPlaceholder: "对方姓名或称呼",
     fromPlaceholder: "你的姓名",
     showFront: "查看正面",
@@ -572,6 +665,7 @@ const TRANSLATIONS: Record<string, any> = {
     unlockCredits: "解锁积分",
     enterPassword: "输入密码",
     magicUnlocked: "魔法积分已解锁！",
+    soraEggAlreadyUsed: "本浏览器已领取过 Sora 彩蛋积分，无法再次使用。",
     downloadStitched: "下载拼接图 (PNG)",
     downloadHidden: "下载隐藏图 (幻影坦克)",
     downloadMode: "下载模式",
@@ -580,6 +674,17 @@ const TRANSLATIONS: Record<string, any> = {
 };
 
 const CREDITS_STORAGE_KEY = 'postcard-studio-credits';
+/** Sora 彩蛋充值每浏览器仅可成功领取一次 */
+const SORA_EGG_USED_KEY = 'postcard-studio-sora-egg-used';
+
+function readSoraEggUsed(): boolean {
+  try {
+    return localStorage.getItem(SORA_EGG_USED_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
 /** 5 credits per generation → 15 allows 3 free postcards for new visitors */
 const DEFAULT_CREDITS = 15;
 
@@ -693,6 +798,7 @@ export default function App() {
   const [showEasterEgg, setShowEasterEgg] = useState(false);
   const [showPasswordInput, setShowPasswordInput] = useState(false);
   const [password, setPassword] = useState("");
+  const [soraEggUsed, setSoraEggUsed] = useState(readSoraEggUsed);
   const [isMagicActive, setIsMagicActive] = useState(false);
   const [downloadMenuOpen, setDownloadMenuOpen] = useState(false);
   const downloadMenuRef = useRef<HTMLDivElement>(null);
@@ -700,8 +806,24 @@ export default function App() {
   const [postcardRevealKey, setPostcardRevealKey] = useState(0);
   const [parallaxTilt, setParallaxTilt] = useState({ rx: 0, ry: 0, smooth: true });
   const postcardTiltShellRef = useRef<HTMLDivElement>(null);
+  /** 中文祝福语：模型不画字，前端行书叠在成图之上 */
+  const [frontTextOverlay, setFrontTextOverlay] = useState<{ title: string; blessing: string } | null>(
+    null
+  );
 
   const t = TRANSLATIONS[language];
+
+  const previewDefaultBlessing =
+    language === 'zh' ? selectedHoliday.zhShortBlessing : selectedHoliday.shortBlessing;
+  const previewBlessingText = customBlessing.trim() || previewDefaultBlessing;
+  const previewTitleText =
+    selectedHoliday.id === 'custom'
+      ? customTheme.trim() || t.customTheme
+      : language === 'zh'
+        ? selectedHoliday.zhName
+        : selectedHoliday.name;
+  const previewChineseBlessing = hasChineseChars(previewBlessingText);
+  const previewChineseTitle = hasChineseChars(previewTitleText);
   
   // Cropping State
   const [isCropping, setIsCropping] = useState(false);
@@ -949,37 +1071,51 @@ export default function App() {
       const blessingToUse = customBlessing.trim() || defaultBlessing;
       const sceneElements = selectedHoliday.id === 'custom' ? (customKeywords || selectedHoliday.elements) : selectedHoliday.elements;
 
-      const hasChinese = (str: string) => /[\u4e00-\u9fa5]/.test(str);
-      const useChineseCalligraphy = hasChinese(holidayName) || hasChinese(blessingToUse) || language === 'zh';
-      const postcardImageSize = useChineseCalligraphy ? ('1K' as const) : ('512' as const);
+      const chineseBlessingOverlay = hasChineseChars(blessingToUse);
+      /* 中文叠字在浏览器完成 → 底图可用 512 + 仅 3.1，通常比 1K 快；画面内嵌中文仍用 1K */
+      const postcardImageSize = chineseBlessingOverlay
+        ? ('512' as const)
+        : hasChineseChars(holidayName) || hasChineseChars(blessingToUse)
+          ? ('1K' as const)
+          : ('512' as const);
 
       const getVerticalPos = (y: number) => (y < 33 ? 'top' : y < 66 ? 'middle' : 'bottom');
       const getHorizontalPos = (x: number) => (x < 33 ? 'left' : x < 66 ? 'center' : 'right');
       const positionDesc = `${getVerticalPos(textPositionPct.y)}-${getHorizontalPos(textPositionPct.x)}`;
 
-      const chineseTypographyBlock = useChineseCalligraphy
+      const holidayNameForPrompt =
+        selectedHoliday.id === 'custom'
+          ? hasChineseChars(customTheme.trim())
+            ? 'a personalized festive celebration'
+            : customTheme.trim() || 'a custom celebration'
+          : selectedHoliday.name;
+
+      const overlayTitleForUi =
+        selectedHoliday.id === 'custom'
+          ? customTheme.trim() || (language === 'zh' ? '自定义' : 'Custom')
+          : language === 'zh'
+            ? selectedHoliday.zhName
+            : selectedHoliday.name;
+
+      const bakeCjkHints =
+        !chineseBlessingOverlay && (hasChineseChars(holidayName) || hasChineseChars(blessingToUse));
+
+      const chineseTypographyBlock = bakeCjkHints
         ? `
-      CHINESE TEXT — LEGIBILITY FIRST (中文文字优先保证清晰可辨，艺术效果不得破坏字形):
-      - Render Standard Chinese characters (规范汉字): every stroke complete, radicals intact; do NOT swap homophones, omit, merge, or deform characters. The visible strings must match EXACTLY: title = "${holidayName}"; blessing line = "${blessingToUse}" (character-for-character).
-      - Use a balanced 楷书/行楷-inspired hand style: elegant but readable. Avoid extreme cursive where strokes become illegible blobs.
-      - Keep ink for Han characters SHARPER than the scenery: limit watercolor/ink bleed INSIDE glyph outlines; soft wash is OK on the background, not smearing through strokes.
-      - Place the title on its own line and the blessing on the next line with generous line-height; no overlapping or vertically squashed characters; baseline stays horizontal (no vertical text unless the style is explicitly vertical scroll — default is horizontal two lines).
-      - Ensure strong contrast between text ink and the area behind it (slight paper strip, soft vignette, or light halo behind text is allowed if it matches ${selectedStyle.name}).
-      - Do not rotate, stretch, or perspective-warp Chinese glyphs.`
+      CHINESE TEXT: Exact strings — title "${holidayName}", blessing "${blessingToUse}". 行楷/楷书, sharp strokes, minimal bleed into glyphs, two lines, strong contrast vs background (${selectedStyle.name}).`
         : '';
 
-      const prompt = `Transform this photo into a beautiful, ${selectedStyle.promptSuffix} for ${holidayName}. 
-      Incorporate ${sceneElements} into the scene. 
-      
-      CRITICAL TEXT INSTRUCTIONS:${chineseTypographyBlock}
-      1. Render the title "${holidayName}" in a large, elegant type treatment that matches the ${selectedStyle.name} style. 
-      ${useChineseCalligraphy ? '2. Chinese title: follow the CHINESE TEXT rules above; prefer clear 行楷 over illegible 草书.' : '2. Use a beautiful vintage script font for Latin text.'}
-      3. Place this title at the ${positionDesc} of the image.
-      4. MANDATORY: On a separate line directly below the title, render the full blessing exactly: "${blessingToUse}". It must be clearly readable at postcard viewing distance.
-      5. Target text scale ~${textSize}pt relative to the image; for Chinese, err slightly larger rather than smaller for clarity.
-      6. Background and illustration may use soft painterly effects; text ink must stay crisper than the painted scene.
-      7. The entire composition (image and text) must feel like a single, cohesive piece of art.
-      8. Ensure both "${holidayName}" and "${blessingToUse}" are fully visible, not cropped, not truncated.`;
+      const reserveZoneBlock = chineseBlessingOverlay
+        ? `No CJK/glyphs in pixels. Theme ${holidayNameForPrompt}; include ${sceneElements}. Calm low-detail band at ${positionDesc} for later overlay. ${selectedStyle.promptSuffix}, ${selectedStyle.name} look.`
+        : '';
+
+      const prompt = chineseBlessingOverlay
+        ? `Transform photo into ${selectedStyle.promptSuffix} postcard art for ${holidayNameForPrompt}. ${reserveZoneBlock}`
+        : `Transform this photo into ${selectedStyle.promptSuffix} for ${holidayName}. Scene: ${sceneElements}.
+      TEXT:${chineseTypographyBlock}
+      1) Title "${holidayName}" — large, matches ${selectedStyle.name}; ${bakeCjkHints ? '行楷可读.' : 'elegant Latin script.'}
+      2) Below: blessing "${blessingToUse}" — legible, ~${textSize}pt scale.
+      3) Position both at ${positionDesc}; crisp text vs softer background; nothing cropped.`;
 
       let resultDataUrl: string;
 
@@ -1041,6 +1177,11 @@ export default function App() {
 
       setGeneratedImage(resultDataUrl);
       setPostcardRevealKey((k) => k + 1);
+      if (chineseBlessingOverlay) {
+        setFrontTextOverlay({ title: overlayTitleForUi, blessing: blessingToUse });
+      } else {
+        setFrontTextOverlay(null);
+      }
       setCredits((prev) => prev - 5);
     } catch (err: unknown) {
       console.error('Generation error:', err);
@@ -1157,6 +1298,9 @@ export default function App() {
       backCanvas.height = frontImg.height;
 
       await document.fonts.ready.catch(() => {});
+      if (frontTextOverlay) {
+        await ensureXingshuFontsLoaded();
+      }
 
       const holidayLabel = language === 'zh' ? selectedHoliday.zhName : selectedHoliday.name;
       const backLabels: PostcardBackLabels = {
@@ -1191,6 +1335,19 @@ export default function App() {
         ctx.fillStyle = 'white';
         ctx.fillRect(0, 0, canvas.width, frontImg.height + borderSize * 2);
         ctx.drawImage(frontImg, borderSize, borderSize);
+        if (frontTextOverlay) {
+          drawPostcardFrontTextOverlay(
+            ctx,
+            borderSize,
+            borderSize,
+            frontImg.width,
+            frontImg.height,
+            frontTextOverlay.title,
+            frontTextOverlay.blessing,
+            textSize,
+            textPositionPct
+          );
+        }
         
         // Draw back with same border
         ctx.fillStyle = 'white';
@@ -1216,6 +1373,19 @@ export default function App() {
         canvas.height = frontImg.height;
         
         ctx.drawImage(frontImg, 0, 0);
+        if (frontTextOverlay) {
+          drawPostcardFrontTextOverlay(
+            ctx,
+            0,
+            0,
+            frontImg.width,
+            frontImg.height,
+            frontTextOverlay.title,
+            frontTextOverlay.blessing,
+            textSize,
+            textPositionPct
+          );
+        }
         const frontData = ctx.getImageData(0, 0, canvas.width, canvas.height);
         
         bCtx.drawImage(backCanvas, 0, 0);
@@ -1314,6 +1484,7 @@ export default function App() {
     setShowEmailInput(false);
     setError(null);
     setParallaxTilt({ rx: 0, ry: 0, smooth: true });
+    setFrontTextOverlay(null);
   };
 
   const handleEasterEggClick = () => {
@@ -1322,16 +1493,28 @@ export default function App() {
   };
 
   const handleUnlockMagic = () => {
-    if (password.toLowerCase() === 'alex') {
-      setIsMagicActive(true);
-      playSound('magic');
-      setCredits(prev => prev + 99);
+    if (readSoraEggUsed()) {
+      setSoraEggUsed(true);
       setShowPasswordInput(false);
       setPassword("");
-      setTimeout(() => setIsMagicActive(false), 3000);
-    } else {
-      setPassword("");
+      return;
     }
+    if (password.toLowerCase() !== 'alex') {
+      setPassword("");
+      return;
+    }
+    try {
+      localStorage.setItem(SORA_EGG_USED_KEY, '1');
+    } catch {
+      /* private mode */
+    }
+    setSoraEggUsed(true);
+    setIsMagicActive(true);
+    playSound('magic');
+    setCredits((prev) => prev + 99);
+    setShowPasswordInput(false);
+    setPassword("");
+    setTimeout(() => setIsMagicActive(false), 3000);
   };
 
   const handlePostcardPointerMove = useCallback(
@@ -1686,15 +1869,19 @@ export default function App() {
                 >
                   <p 
                     style={{ fontSize: `${textSize}px` }}
-                    className="font-serif italic text-white drop-shadow-md leading-tight sm:leading-none"
+                    className={`text-white drop-shadow-md leading-tight sm:leading-none ${
+                      previewChineseTitle ? 'font-chinese-xingshu' : 'font-serif italic'
+                    }`}
                   >
-                    {selectedHoliday.id === 'custom' ? (customTheme || t.customTheme) : (language === 'zh' ? selectedHoliday.zhName : selectedHoliday.name)}
+                    {previewTitleText}
                   </p>
                   <p 
                     style={{ fontSize: `${textSize * 0.5}px` }}
-                    className="text-white/80 drop-shadow-md mt-1 max-w-[min(100%,10rem)] sm:max-w-[140px] line-clamp-2 sm:line-clamp-1 leading-snug"
+                    className={`drop-shadow-md mt-1 max-w-[min(100%,10rem)] sm:max-w-[140px] line-clamp-2 sm:line-clamp-1 leading-snug ${
+                      previewChineseBlessing ? 'font-chinese-xingshu text-white/95' : 'text-white/80'
+                    }`}
                   >
-                    {customBlessing.trim() || (language === 'zh' ? selectedHoliday.zhShortBlessing : selectedHoliday.shortBlessing)}
+                    {previewBlessingText}
                   </p>
                   <div className="absolute -top-1 -right-1 w-2 h-2 bg-white rounded-full animate-pulse" />
                 </motion.div>
@@ -1909,6 +2096,34 @@ export default function App() {
                           className={`h-full w-full object-cover ${!reduceMotion ? 'postcard-breathe-img' : ''}`}
                         />
                       </motion.div>
+                      {frontTextOverlay && (
+                        <div
+                          className="pointer-events-none absolute inset-0 z-[25] flex items-center justify-center"
+                          aria-hidden
+                        >
+                          <div
+                            style={{
+                              left: `${textPositionPct.x}%`,
+                              top: `${textPositionPct.y}%`,
+                              transform: 'translate(-50%, -50%)',
+                            }}
+                            className="absolute max-w-[min(92%,20rem)] text-center px-2"
+                          >
+                            <p
+                              style={{ fontSize: `clamp(14px, ${textSize * 1.05}px, 11vw)` }}
+                              className="font-chinese-xingshu text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.85),0_0_18px_rgba(0,0,0,0.2)] leading-tight"
+                            >
+                              {frontTextOverlay.title}
+                            </p>
+                            <p
+                              style={{ fontSize: `clamp(11px, ${textSize * 0.55}px, 5vw)` }}
+                              className="font-chinese-xingshu text-white/95 mt-1.5 [text-shadow:0_1px_3px_rgba(0,0,0,0.8)] leading-snug"
+                            >
+                              {frontTextOverlay.blessing}
+                            </p>
+                          </div>
+                        </div>
+                      )}
                       <PostcardAmbientParticles holidayId={selectedHoliday.id} reducedMotion={reduceMotion} />
                     </div>
                   </div>
@@ -2276,31 +2491,37 @@ export default function App() {
                         </div>
                         <h3 className="text-lg sm:text-xl font-semibold leading-snug">{t.unlockCredits}</h3>
                       </div>
-                      
-                      <div className="bg-slate-50 rounded-2xl px-4 py-3 border border-slate-200 mb-6">
-                        <input 
-                          type="password" 
-                          placeholder={t.enterPassword}
-                          value={password}
-                          onChange={(e) => setPassword(e.target.value)}
-                          className="w-full bg-transparent border-none focus:ring-0 text-base"
-                          autoFocus
-                        />
-                      </div>
+
+                      {soraEggUsed ? (
+                        <p className="text-amber-800/90 text-sm leading-relaxed mb-6">{t.soraEggAlreadyUsed}</p>
+                      ) : (
+                        <div className="bg-slate-50 rounded-2xl px-4 py-3 border border-slate-200 mb-6">
+                          <input
+                            type="password"
+                            placeholder={t.enterPassword}
+                            value={password}
+                            onChange={(e) => setPassword(e.target.value)}
+                            className="w-full bg-transparent border-none focus:ring-0 text-base"
+                            autoFocus
+                          />
+                        </div>
+                      )}
 
                       <div className="flex gap-3">
-                        <button 
+                        <button
                           onClick={() => setShowPasswordInput(false)}
-                          className="flex-1 py-3 rounded-xl border border-slate-200 text-slate-600 font-medium hover:bg-slate-50 transition-all"
+                          className={`py-3 rounded-xl border border-slate-200 text-slate-600 font-medium hover:bg-slate-50 transition-all ${soraEggUsed ? 'w-full' : 'flex-1'}`}
                         >
                           {t.cancel}
                         </button>
-                        <button 
-                          onClick={handleUnlockMagic}
-                          className="flex-1 py-3 rounded-xl bg-slate-900 text-white font-semibold shadow-lg hover:bg-slate-800 transition-all"
-                        >
-                          {t.send}
-                        </button>
+                        {!soraEggUsed && (
+                          <button
+                            onClick={handleUnlockMagic}
+                            className="flex-1 py-3 rounded-xl bg-slate-900 text-white font-semibold shadow-lg hover:bg-slate-800 transition-all"
+                          >
+                            {t.send}
+                          </button>
+                        )}
                       </div>
                     </motion.div>
                   </motion.div>

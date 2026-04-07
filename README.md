@@ -134,7 +134,7 @@ Do **not** open port `8787` to the public internet if the reverse proxy runs on 
 
 ## Image generation speed
 
-The app tries **image output** models in order (`gemini-2.5-flash-image`, then `gemini-3.1-flash-image-preview` on failure) in two phases: **with** `responseModalities: IMAGE` for all models, then **without**. List is in [`src/lib/geminiImageModels.ts`](src/lib/geminiImageModels.ts). Output **`imageSize`** is **`1K`** when the postcard text is Chinese (UI or copy contains Han characters); **English-only** sessions use **`512`** (smaller/cheaper), which only works on `gemini-3.1-flash-image-preview`, so the model chain is narrowed automatically — see `modelsForPostcardImageSize` in [`src/lib/geminiPostcardGeneration.ts`](src/lib/geminiPostcardGeneration.ts).
+The app tries **image output** models in order (**`gemini-3.1-flash-image-preview` first**, then `gemini-2.5-flash-image` on failure) in two phases: **with** `responseModalities: IMAGE` for all models, then **without**. List is in [`src/lib/geminiImageModels.ts`](src/lib/geminiImageModels.ts). **`imageSize`**: **English-only** and **Chinese blessing with browser overlay** use **`512`** (3.1-only chain, usually faster); **Han characters baked into the image** use **`1K`** — see `modelsForPostcardImageSize` in [`src/lib/geminiPostcardGeneration.ts`](src/lib/geminiPostcardGeneration.ts).
 
 Further gains: smaller source images before upload, stable network, and billing/quota on the Google project.
 

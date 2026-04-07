@@ -47,8 +47,8 @@ export function pickInlineImageFromResponse(response: {
 }
 
 /**
- * Two-phase calls: all models with IMAGE modality first, then all without.
- * Faster when an early model succeeds with IMAGE (skips slower fallbacks per model).
+ * Two-phase: all models with responseModalities IMAGE, then all without (API quirks).
+ * Model order is fastest-first in POSTCARD_IMAGE_MODELS (3.1 preview before 2.5).
  */
 export async function runGeminiPostcardGeneration(
   apiKey: string,
