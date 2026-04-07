@@ -614,6 +614,9 @@ const TRANSLATIONS: Record<string, any> = {
     downloadHidden: "Download Hidden (Phantom Tank)",
     downloadMode: "Download Mode",
     easterEggHint: 'Double-tap "Sora" or press and hold to unlock a surprise',
+    includeOccasionTitle: 'Show occasion title on the card',
+    includeBlessingLine: 'Show blessing line on the card',
+    cardTextHint: 'By default the image has no lettering — turn on options below to add text.',
   },
   zh: {
     title: "Sora的明信片工坊",
@@ -670,6 +673,9 @@ const TRANSLATIONS: Record<string, any> = {
     downloadHidden: "下载隐藏图 (幻影坦克)",
     downloadMode: "下载模式",
     easterEggHint: "连点两下「Sora」或长按，可解锁小彩蛋",
+    includeOccasionTitle: "在明信片上显示节日/主题标题",
+    includeBlessingLine: "在明信片上显示祝福语",
+    cardTextHint: "默认不在画面上添加任何文字；需要时再勾选下方选项。",
   }
 };
 
@@ -783,6 +789,9 @@ export default function App() {
   const [customTheme, setCustomTheme] = useState("");
   const [customBlessing, setCustomBlessing] = useState("");
   const [customKeywords, setCustomKeywords] = useState("");
+  /** Default: no lettering on the generated image; user opts in */
+  const [includeTitleOnCard, setIncludeTitleOnCard] = useState(false);
+  const [includeBlessingOnCard, setIncludeBlessingOnCard] = useState(false);
   const [recipientEmail, setRecipientEmail] = useState("");
   const [isSent, setIsSent] = useState(false);
   const [isSending, setIsSending] = useState(false);
@@ -815,13 +824,16 @@ export default function App() {
 
   const previewDefaultBlessing =
     language === 'zh' ? selectedHoliday.zhShortBlessing : selectedHoliday.shortBlessing;
-  const previewBlessingText = customBlessing.trim() || previewDefaultBlessing;
-  const previewTitleText =
-    selectedHoliday.id === 'custom'
+  const previewBlessingText = includeBlessingOnCard
+    ? customBlessing.trim() || previewDefaultBlessing
+    : '';
+  const previewTitleText = includeTitleOnCard
+    ? selectedHoliday.id === 'custom'
       ? customTheme.trim() || t.customTheme
       : language === 'zh'
         ? selectedHoliday.zhName
-        : selectedHoliday.name;
+        : selectedHoliday.name
+    : '';
   const previewChineseBlessing = hasChineseChars(previewBlessingText);
   const previewChineseTitle = hasChineseChars(previewTitleText);
   
@@ -1064,16 +1076,36 @@ export default function App() {
         return;
       }
 
-      const holidayName = selectedHoliday.id === 'custom' ? customTheme : selectedHoliday.name;
       const defaultBlessing = language === 'zh' ? selectedHoliday.zhShortBlessing : selectedHoliday.shortBlessing;
-      const blessingToUse = customBlessing.trim() || defaultBlessing;
+      const blessingToUse = includeBlessingOnCard
+        ? customBlessing.trim() || defaultBlessing
+        : '';
       const sceneElements = selectedHoliday.id === 'custom' ? (customKeywords || selectedHoliday.elements) : selectedHoliday.elements;
 
-      const chineseBlessingOverlay = hasChineseChars(blessingToUse);
-      /* 中文叠字在浏览器完成 → 底图可用 512 + 仅 3.1，通常比 1K 快；画面内嵌中文仍用 1K */
+      const holidayDisplayName =
+        selectedHoliday.id === 'custom'
+          ? customTheme.trim()
+          : language === 'zh'
+            ? selectedHoliday.zhName
+            : selectedHoliday.name;
+
+      if (includeTitleOnCard && selectedHoliday.id === 'custom' && !customTheme.trim()) {
+        setError(
+          language === 'zh'
+            ? '已勾选显示主题标题，请填写自定义主题。'
+            : 'You enabled the occasion title — please enter a custom theme.'
+        );
+        return;
+      }
+
+      const holidayName = selectedHoliday.id === 'custom' ? customTheme : selectedHoliday.name;
+
+      const chineseBlessingOverlay = includeBlessingOnCard && hasChineseChars(blessingToUse);
+      /* 中文叠字在浏览器完成 → 底图可用 512 + 仅 3.1；画面内嵌中文仍用 1K */
       const postcardImageSize = chineseBlessingOverlay
         ? ('512' as const)
-        : hasChineseChars(holidayName) || hasChineseChars(blessingToUse)
+        : (includeTitleOnCard && hasChineseChars(holidayDisplayName)) ||
+            (includeBlessingOnCard && hasChineseChars(blessingToUse))
           ? ('1K' as const)
           : ('512' as const);
 
@@ -1096,24 +1128,60 @@ export default function App() {
             : selectedHoliday.name;
 
       const bakeCjkHints =
-        !chineseBlessingOverlay && (hasChineseChars(holidayName) || hasChineseChars(blessingToUse));
+        !chineseBlessingOverlay &&
+        ((includeTitleOnCard && hasChineseChars(holidayDisplayName)) ||
+          (includeBlessingOnCard && hasChineseChars(blessingToUse)));
 
       const chineseTypographyBlock = bakeCjkHints
-        ? `
-      CHINESE TEXT: Exact strings — title "${holidayName}", blessing "${blessingToUse}". 行楷/楷书, sharp strokes, minimal bleed into glyphs, two lines, strong contrast vs background (${selectedStyle.name}).`
+        ? (() => {
+            const bits: string[] = [];
+            if (includeTitleOnCard && hasChineseChars(holidayDisplayName)) {
+              bits.push(`title "${holidayDisplayName}"`);
+            }
+            if (includeBlessingOnCard && hasChineseChars(blessingToUse)) {
+              bits.push(`blessing "${blessingToUse}"`);
+            }
+            return `
+      CHINESE TEXT: Exact strings — ${bits.join('; ')}. 行楷/楷书, sharp strokes, minimal bleed into glyphs, strong contrast vs background (${selectedStyle.name}).`;
+          })()
         : '';
 
       const reserveZoneBlock = chineseBlessingOverlay
         ? `No CJK/glyphs in pixels. Theme ${holidayNameForPrompt}; include ${sceneElements}. Calm low-detail band at ${positionDesc} for later overlay. ${selectedStyle.promptSuffix}, ${selectedStyle.name} look.`
         : '';
 
-      const prompt = chineseBlessingOverlay
-        ? `Transform photo into ${selectedStyle.promptSuffix} postcard art for ${holidayNameForPrompt}. ${reserveZoneBlock}`
-        : `Transform this photo into ${selectedStyle.promptSuffix} for ${holidayName}. Scene: ${sceneElements}.
-      TEXT:${chineseTypographyBlock}
-      1) Title "${holidayName}" — large, matches ${selectedStyle.name}; ${bakeCjkHints ? '行楷可读.' : 'elegant Latin script.'}
-      2) Below: blessing "${blessingToUse}" — legible, ~${textSize}pt scale.
-      3) Position both at ${positionDesc}; crisp text vs softer background; nothing cropped.`;
+      const wantsAnyCardText = includeTitleOnCard || includeBlessingOnCard;
+
+      const promptNoText = `Transform this photo into ${selectedStyle.promptSuffix} postcard art. Scene mood: ${sceneElements}. The image must contain absolutely no text, letters, numbers, captions, titles, watermarks, logos, or typography — artwork only.`;
+
+      let prompt: string;
+      if (!wantsAnyCardText) {
+        prompt = promptNoText;
+      } else if (chineseBlessingOverlay) {
+        prompt = `Transform photo into ${selectedStyle.promptSuffix} postcard art for ${holidayNameForPrompt}. ${reserveZoneBlock}`;
+      } else {
+        const lines: string[] = [
+          `Transform this photo into ${selectedStyle.promptSuffix} for ${holidayName}. Scene: ${sceneElements}.`,
+        ];
+        if (chineseTypographyBlock.trim()) {
+          lines.push(`TEXT:${chineseTypographyBlock}`);
+        }
+        let n = 1;
+        if (includeTitleOnCard) {
+          lines.push(
+            `${n}) Title "${holidayDisplayName}" — large, matches ${selectedStyle.name}; ${hasChineseChars(holidayDisplayName) ? '行楷可读.' : 'elegant Latin script.'}`
+          );
+          n += 1;
+        }
+        if (includeBlessingOnCard) {
+          lines.push(`${n}) Blessing "${blessingToUse}" — legible, ~${textSize}pt scale.`);
+          n += 1;
+        }
+        lines.push(
+          `${n}) Position ${includeTitleOnCard && includeBlessingOnCard ? 'both lines' : 'the text'} at ${positionDesc}; crisp text vs softer background; nothing cropped.`
+        );
+        prompt = lines.join('\n      ');
+      }
 
       let resultDataUrl: string;
 
@@ -1176,7 +1244,10 @@ export default function App() {
       setGeneratedImage(resultDataUrl);
       setPostcardRevealKey((k) => k + 1);
       if (chineseBlessingOverlay) {
-        setFrontTextOverlay({ title: overlayTitleForUi, blessing: blessingToUse });
+        setFrontTextOverlay({
+          title: includeTitleOnCard ? overlayTitleForUi : '',
+          blessing: blessingToUse,
+        });
       } else {
         setFrontTextOverlay(null);
       }
@@ -1483,6 +1554,8 @@ export default function App() {
     setError(null);
     setParallaxTilt({ rx: 0, ry: 0, smooth: true });
     setFrontTextOverlay(null);
+    setIncludeTitleOnCard(false);
+    setIncludeBlessingOnCard(false);
   };
 
   const handleEasterEggClick = () => {
@@ -1855,34 +1928,39 @@ export default function App() {
               >
                 <img src={uploadedImage} alt="Preview" className="w-full h-full object-cover select-none" />
                 
-                {/* Text preview overlay (position matches AI prompt) */}
-                <motion.div 
-                  style={{ 
-                    left: `${textPositionPct.x}%`, 
-                    top: `${textPositionPct.y}%`,
-                    x: "-50%",
-                    y: "-50%"
-                  }}
-                  className="absolute z-10 p-2.5 sm:p-4 max-w-[min(92%,18rem)] sm:max-w-none bg-white/20 backdrop-blur-md border border-white/30 rounded-lg sm:rounded-xl flex flex-col items-center text-center shadow-lg pointer-events-none"
-                >
-                  <p 
-                    style={{ fontSize: `${textSize}px` }}
-                    className={`text-white drop-shadow-md leading-tight sm:leading-none ${
-                      previewChineseTitle ? 'font-chinese-xingshu' : 'font-serif italic'
-                    }`}
+                {(previewTitleText || previewBlessingText) && (
+                  <motion.div
+                    style={{
+                      left: `${textPositionPct.x}%`,
+                      top: `${textPositionPct.y}%`,
+                      x: '-50%',
+                      y: '-50%',
+                    }}
+                    className="absolute z-10 p-2.5 sm:p-4 max-w-[min(92%,18rem)] sm:max-w-none bg-white/20 backdrop-blur-md border border-white/30 rounded-lg sm:rounded-xl flex flex-col items-center text-center shadow-lg pointer-events-none"
                   >
-                    {previewTitleText}
-                  </p>
-                  <p 
-                    style={{ fontSize: `${textSize * 0.5}px` }}
-                    className={`drop-shadow-md mt-1 max-w-[min(100%,10rem)] sm:max-w-[140px] line-clamp-2 sm:line-clamp-1 leading-snug ${
-                      previewChineseBlessing ? 'font-chinese-xingshu text-white/95' : 'text-white/80'
-                    }`}
-                  >
-                    {previewBlessingText}
-                  </p>
-                  <div className="absolute -top-1 -right-1 w-2 h-2 bg-white rounded-full animate-pulse" />
-                </motion.div>
+                    {previewTitleText ? (
+                      <p
+                        style={{ fontSize: `${textSize}px` }}
+                        className={`text-white drop-shadow-md leading-tight sm:leading-none ${
+                          previewChineseTitle ? 'font-chinese-xingshu' : 'font-serif italic'
+                        }`}
+                      >
+                        {previewTitleText}
+                      </p>
+                    ) : null}
+                    {previewBlessingText ? (
+                      <p
+                        style={{ fontSize: `${textSize * 0.5}px` }}
+                        className={`drop-shadow-md ${previewTitleText ? 'mt-1' : ''} max-w-[min(100%,10rem)] sm:max-w-[140px] line-clamp-2 sm:line-clamp-1 leading-snug ${
+                          previewChineseBlessing ? 'font-chinese-xingshu text-white/95' : 'text-white/80'
+                        }`}
+                      >
+                        {previewBlessingText}
+                      </p>
+                    ) : null}
+                    <div className="absolute -top-1 -right-1 w-2 h-2 bg-white rounded-full animate-pulse" />
+                  </motion.div>
+                )}
 
                 <button 
                   onClick={() => setUploadedImage(null)}
@@ -1912,6 +1990,28 @@ export default function App() {
                   </div>
                 </div>
 
+                <p className="text-xs sm:text-sm text-slate-500 px-1 sm:px-2 leading-relaxed">{t.cardTextHint}</p>
+                <div className="flex flex-col gap-3 sm:gap-3.5 bg-white/60 rounded-2xl border border-slate-100 p-3 sm:p-4">
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={includeTitleOnCard}
+                      onChange={(e) => setIncludeTitleOnCard(e.target.checked)}
+                      className="mt-1 rounded border-slate-300 text-slate-900 focus:ring-slate-200"
+                    />
+                    <span className="text-sm sm:text-base text-slate-700 leading-snug">{t.includeOccasionTitle}</span>
+                  </label>
+                  <label className="flex items-start gap-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={includeBlessingOnCard}
+                      onChange={(e) => setIncludeBlessingOnCard(e.target.checked)}
+                      className="mt-1 rounded border-slate-300 text-slate-900 focus:ring-slate-200"
+                    />
+                    <span className="text-sm sm:text-base text-slate-700 leading-snug">{t.includeBlessingLine}</span>
+                  </label>
+                </div>
+
                 <div className="flex flex-col gap-2">
                   <div className="flex justify-between items-center px-1 sm:px-2">
                     <label className="text-sm sm:text-base font-medium text-slate-500">{t.textSize}</label>
@@ -1931,7 +2031,10 @@ export default function App() {
                 {selectedHoliday.id === 'custom' && (
                   <>
                     <div className="flex flex-col gap-2">
-                      <label className="text-sm sm:text-base font-medium text-slate-500 ml-1 sm:ml-2">{t.customTheme}</label>
+                      <label className="text-sm sm:text-base font-medium text-slate-500 ml-1 sm:ml-2">
+                        {t.customTheme}
+                        {includeTitleOnCard ? <span className="text-red-500 font-normal"> *</span> : null}
+                      </label>
                       <input 
                         type="text"
                         placeholder={t.themePlaceholder}
@@ -1953,16 +2056,18 @@ export default function App() {
                   </>
                 )}
 
-                <div className="flex flex-col gap-2">
-                  <label className="text-sm sm:text-base font-medium text-slate-500 ml-1 sm:ml-2">{t.customBlessing}</label>
-                  <input 
-                    type="text"
-                    placeholder={language === 'zh' ? selectedHoliday.zhPlaceholder : selectedHoliday.placeholder}
-                    value={customBlessing}
-                    onChange={(e) => setCustomBlessing(e.target.value)}
-                    className="w-full bg-white border border-slate-200 rounded-2xl px-4 py-3.5 sm:px-6 sm:py-4 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-200 transition-all"
-                  />
-                </div>
+                {includeBlessingOnCard && (
+                  <div className="flex flex-col gap-2">
+                    <label className="text-sm sm:text-base font-medium text-slate-500 ml-1 sm:ml-2">{t.customBlessing}</label>
+                    <input 
+                      type="text"
+                      placeholder={language === 'zh' ? selectedHoliday.zhPlaceholder : selectedHoliday.placeholder}
+                      value={customBlessing}
+                      onChange={(e) => setCustomBlessing(e.target.value)}
+                      className="w-full bg-white border border-slate-200 rounded-2xl px-4 py-3.5 sm:px-6 sm:py-4 text-base shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-200 transition-all"
+                    />
+                  </div>
+                )}
 
                 <div className="flex flex-col items-center gap-3 sm:gap-4 w-full">
                   <button 
