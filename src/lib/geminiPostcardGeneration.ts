@@ -2,15 +2,12 @@ import { GoogleGenAI, Modality } from '@google/genai';
 import { POSTCARD_IMAGE_MODELS } from './geminiImageModels';
 
 /**
- * Gemini image output size. `"512"` is only valid for `gemini-3.1-flash-image-preview`
- * (see Google docs); we restrict the model chain accordingly.
+ * Gemini image output size for `imageConfig.imageSize`.
+ * We lock to `512` in the app for speed; `gemini-2.5-flash-image` supports these sizes per Vertex docs.
  */
 export type PostcardImageSize = '512' | '1K' | '2K' | '4K';
 
-const MODELS_FOR_512 = ['gemini-3.1-flash-image-preview'] as const;
-
-export function modelsForPostcardImageSize(size: PostcardImageSize | undefined): readonly string[] {
-  if (size === '512') return MODELS_FOR_512;
+export function modelsForPostcardImageSize(_size: PostcardImageSize | undefined): readonly string[] {
   return POSTCARD_IMAGE_MODELS;
 }
 
@@ -48,7 +45,6 @@ export function pickInlineImageFromResponse(response: {
 
 /**
  * Two-phase: all models with responseModalities IMAGE, then all without (API quirks).
- * Model order is fastest-first in POSTCARD_IMAGE_MODELS (3.1 preview before 2.5).
  */
 export async function runGeminiPostcardGeneration(
   apiKey: string,

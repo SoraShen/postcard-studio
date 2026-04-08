@@ -132,11 +132,22 @@ Do **not** open port `8787` to the public internet if the reverse proxy runs on 
 
 ---
 
-## Image generation speed
+## Image generation
 
-The app tries **image output** models in order (**`gemini-3.1-flash-image-preview` first**, then `gemini-2.5-flash-image` on failure) in two phases: **with** `responseModalities: IMAGE` for all models, then **without**. List is in [`src/lib/geminiImageModels.ts`](src/lib/geminiImageModels.ts). **`imageSize`**: **English-only** and **Chinese blessing with browser overlay** use **`512`** (3.1-only chain, usually faster); **Han characters baked into the image** use **`1K`** — see `modelsForPostcardImageSize` in [`src/lib/geminiPostcardGeneration.ts`](src/lib/geminiPostcardGeneration.ts).
+**Model**  
+The app uses **`gemini-2.5-flash-image` only** (see [`src/lib/geminiImageModels.ts`](src/lib/geminiImageModels.ts)). Generation runs in **`responseModalities: IMAGE` first**, then **fallback without** that flag, for the same model (see [`src/lib/geminiPostcardGeneration.ts`](src/lib/geminiPostcardGeneration.ts)).
 
-Further gains: smaller source images before upload, stable network, and billing/quota on the Google project.
+**Output size**  
+`imageConfig.imageSize` is **`512`** for all requests (faster, lower pixel output).
+
+**Upload vs API payload**  
+The **crop preview** uses the **original file read as a data URL** and a **high-quality crop** (only a very large safety cap on canvas size). Right before the API call, the image is **compressed** (max long edge **1024px**, JPEG) so the request stays smaller and faster; the UI still shows the full-quality preview.
+
+**Vertex AI / regions (Worker proxy)**  
+If you call Gemini through **Vertex** (e.g. Cloudflare Worker with `VERTEX_PROJECT_ID` / `VERTEX_LOCATION`), pick a region where **`gemini-2.5-flash-image`** is available. For Asia–Pacific, Google’s docs list it in the same table row as **Hong Kong (`asia-east2`)**, **Singapore (`asia-southeast1`)**, **Taiwan (`asia-east1`)**, **Tokyo (`asia-northeast1`)**, **Seoul (`asia-northeast3`)**, and others — see [Generative AI on Vertex AI locations](https://cloud.google.com/vertex-ai/generative-ai/docs/learn/locations). **`global`** is also valid if you use the global endpoint pattern.
+
+**Speed**  
+Expect latency mainly from the image model; smaller inputs (after client-side compression) and a stable network help. Ensure quota and billing are enabled on the Google project.
 
 ---
 

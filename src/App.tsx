@@ -108,6 +108,35 @@ function hasChineseChars(str: string): boolean {
   return /[\u4e00-\u9fff]/.test(str);
 }
 
+/** Downscale JPEG for API only — preview/crop use full-quality URLs. */
+const API_INPUT_MAX_DIM = 1024;
+const API_JPEG_QUALITY = 0.72;
+/** Safety cap for cropped preview canvas (memory). */
+const MAX_PREVIEW_CROP_DIM = 4096;
+
+async function compressImageDataUrlForApi(dataUrl: string): Promise<string> {
+  try {
+    const img = await createImage(dataUrl);
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return dataUrl;
+    let w = img.naturalWidth;
+    let h = img.naturalHeight;
+    if (w <= 0 || h <= 0) return dataUrl;
+    if (w > API_INPUT_MAX_DIM || h > API_INPUT_MAX_DIM) {
+      const scale = API_INPUT_MAX_DIM / Math.max(w, h);
+      w = Math.round(w * scale);
+      h = Math.round(h * scale);
+    }
+    canvas.width = w;
+    canvas.height = h;
+    ctx.drawImage(img, 0, 0, w, h);
+    return canvas.toDataURL('image/jpeg', API_JPEG_QUALITY);
+  } catch {
+    return dataUrl;
+  }
+}
+
 async function ensureXingshuFontsLoaded(): Promise<void> {
   try {
     await document.fonts.load("400 64px 'Long Cang'");
@@ -941,38 +970,9 @@ export default function App() {
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
-      reader.onloadend = async () => {
+      reader.onloadend = () => {
         const result = reader.result as string;
-        
-        // Initial compression to keep UI responsive and memory usage low
-        try {
-          const img = await createImage(result);
-          const canvas = document.createElement('canvas');
-          const ctx = canvas.getContext('2d');
-          if (!ctx) {
-            setUploadedImage(result);
-            setIsCropping(true);
-            return;
-          }
-
-          // Limit initial upload size (crop UI only; final API payload is smaller)
-          const MAX_UPLOAD_DIM = 1536;
-          let width = img.width;
-          let height = img.height;
-          if (width > MAX_UPLOAD_DIM || height > MAX_UPLOAD_DIM) {
-            const scale = MAX_UPLOAD_DIM / Math.max(width, height);
-            width *= scale;
-            height *= scale;
-          }
-
-          canvas.width = width;
-          canvas.height = height;
-          ctx.drawImage(img, 0, 0, width, height);
-          setUploadedImage(canvas.toDataURL('image/jpeg', 0.85));
-        } catch (err) {
-          setUploadedImage(result);
-        }
-        
+        setUploadedImage(result);
         setIsCropping(true);
         setError(null);
       };
@@ -984,15 +984,6 @@ export default function App() {
     setCroppedAreaPixels(areaPixels);
   }, []);
 
-  const createImage = (url: string): Promise<HTMLImageElement> =>
-    new Promise((resolve, reject) => {
-      const image = new Image();
-      image.addEventListener('load', () => resolve(image));
-      image.addEventListener('error', (error) => reject(error));
-      image.setAttribute('crossOrigin', 'anonymous');
-      image.src = url;
-    });
-
   const getCroppedImg = async (imageSrc: string, pixelCrop: Area): Promise<string | null> => {
     const image = await createImage(imageSrc);
     const canvas = document.createElement('canvas');
@@ -1000,15 +991,12 @@ export default function App() {
 
     if (!ctx) return null;
 
-    // Pre-processing: cap longest edge before Gemini (was 1024; smaller = fewer image tokens)
-    const MAX_DIMENSION = 768;
     let targetWidth = pixelCrop.width;
     let targetHeight = pixelCrop.height;
-
-    if (targetWidth > MAX_DIMENSION || targetHeight > MAX_DIMENSION) {
-      const scale = MAX_DIMENSION / Math.max(targetWidth, targetHeight);
-      targetWidth *= scale;
-      targetHeight *= scale;
+    if (targetWidth > MAX_PREVIEW_CROP_DIM || targetHeight > MAX_PREVIEW_CROP_DIM) {
+      const scale = MAX_PREVIEW_CROP_DIM / Math.max(targetWidth, targetHeight);
+      targetWidth = Math.round(targetWidth * scale);
+      targetHeight = Math.round(targetHeight * scale);
     }
 
     canvas.width = targetWidth;
@@ -1026,7 +1014,7 @@ export default function App() {
       targetHeight
     );
 
-    return canvas.toDataURL('image/jpeg', 0.75);
+    return canvas.toDataURL('image/jpeg', 0.92);
   };
 
   const handleConfirmCrop = async () => {
@@ -1068,7 +1056,8 @@ export default function App() {
       const workerBase = (import.meta.env.VITE_GEMINI_WORKER_BASE || '').replace(/\/$/, '');
       const backendBase = (import.meta.env.VITE_GEMINI_BACKEND_URL || '').replace(/\/$/, '');
 
-      const parsed = parseDataUrlImage(uploadedImage);
+      const apiImageDataUrl = await compressImageDataUrlForApi(uploadedImage);
+      const parsed = parseDataUrlImage(apiImageDataUrl);
       if (!parsed?.base64) {
         setError(
           language === 'zh' ? '图片数据无效，请重新上传。' : 'Invalid image data. Please upload again.'
@@ -1101,13 +1090,7 @@ export default function App() {
       const holidayName = selectedHoliday.id === 'custom' ? customTheme : selectedHoliday.name;
 
       const chineseBlessingOverlay = includeBlessingOnCard && hasChineseChars(blessingToUse);
-      /* 中文叠字在浏览器完成 → 底图可用 512 + 仅 3.1；画面内嵌中文仍用 1K */
-      const postcardImageSize = chineseBlessingOverlay
-        ? ('512' as const)
-        : (includeTitleOnCard && hasChineseChars(holidayDisplayName)) ||
-            (includeBlessingOnCard && hasChineseChars(blessingToUse))
-          ? ('1K' as const)
-          : ('512' as const);
+      const postcardImageSize = '512' as const;
 
       const getVerticalPos = (y: number) => (y < 33 ? 'top' : y < 66 ? 'middle' : 'bottom');
       const getHorizontalPos = (x: number) => (x < 33 ? 'left' : x < 66 ? 'center' : 'right');
@@ -1256,6 +1239,13 @@ export default function App() {
       console.error('Generation error:', err);
 
       const raw = formatGenaiError(err).toLowerCase();
+      const builtWithProxy = import.meta.env.VITE_USE_GEMINI_PROXY === 'true';
+      const looksVertexOrWorker =
+        builtWithProxy ||
+        raw.includes('aiplatform') ||
+        raw.includes('vertex') ||
+        raw.includes('oauth') ||
+        raw.includes('service account');
       let userFriendlyError =
         language === 'zh' ? '生成失败，请稍后再试。' : 'Failed to generate postcard. Please try again.';
 
@@ -1270,16 +1260,26 @@ export default function App() {
         raw.includes('permission denied') ||
         raw.includes('unauthorized')
       ) {
-        userFriendlyError =
-          language === 'zh'
-            ? 'API 密钥无效或无权使用该模型，请检查 Google AI Studio 中的密钥与账单。'
-            : 'Invalid API key or permission denied. Check your key and billing in Google AI Studio.';
-        if (raw.includes('not found') || raw.includes('permission')) {
-          setHasApiKey(false);
+        if (looksVertexOrWorker) {
+          userFriendlyError =
+            language === 'zh'
+              ? '鉴权失败（Vertex / Worker）：请检查 Cloudflare Worker 的 GCP_SA_KEY_JSON、VERTEX_PROJECT_ID、VERTEX_LOCATION，GCP 中是否启用 Vertex AI API，以及服务账号是否有 Vertex AI User 等权限。若线上页面未走 Worker，请在香港服务器用 VITE_USE_GEMINI_PROXY=true 与 VITE_GEMINI_WORKER_BASE=你的 Worker 地址重新执行 npm run build。'
+              : 'Auth failed (Vertex / Worker): verify Cloudflare Worker secrets (GCP_SA_KEY_JSON), VERTEX_PROJECT_ID, VERTEX_LOCATION, Vertex AI API enabled, and service-account roles. If the site was built without the proxy flags, rebuild with VITE_USE_GEMINI_PROXY=true and VITE_GEMINI_WORKER_BASE=<your worker URL>.';
+        } else {
+          userFriendlyError =
+            language === 'zh'
+              ? 'API 密钥无效或无权使用该模型，请检查 Google AI Studio 中的密钥与账单。'
+              : 'Invalid API key or permission denied. Check your key and billing in Google AI Studio.';
+          if (raw.includes('not found') || raw.includes('permission')) {
+            setHasApiKey(false);
+          }
         }
       } else if (raw.includes('not found') || raw.includes('404') || raw.includes('does not exist')) {
-        userFriendlyError =
-          language === 'zh'
+        userFriendlyError = looksVertexOrWorker
+          ? language === 'zh'
+            ? '模型或区域不可用：确认 Vertex 区域（如 asia-east1）支持所选图像模型，且项目已开通相应 API。'
+            : 'Model or region unavailable: confirm your Vertex location supports the image model and APIs are enabled.'
+          : language === 'zh'
             ? '当前账号不可用所选图像模型，请在 AI Studio 启用计费或更换可用的 Gemini 模型。'
             : 'Image model not available for this API key. Enable billing or use a project with access in AI Studio.';
       } else if (raw.includes('safety') || raw.includes('blocked') || raw.includes('blockreason')) {
